@@ -4,6 +4,7 @@
     { "path": "packages/core" },
     { "path": "packages/openai" },
     { "path": "packages/anthropic" },
-    { "path": "packages/vercel" }
+    { "path": "packages/vercel" },
+    { "path": "packages/cli" }
   ]
 }

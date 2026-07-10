@@ -1,0 +1,31 @@
+{
+  "name": "@receipta/cli",
+  "version": "0.1.0",
+  "description": "The receipta CLI: verify receipt chains offline, export in auditor formats, generate signing keys.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/cli.js",
+  "bin": {
+    "receipta": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "src", "README.md"],
+  "engines": { "node": ">=20" },
+  "publishConfig": { "access": "public", "provenance": true },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "verify:demo": "node ../../packages/core/scripts/verify-demo.mjs"
+  },
+  "dependencies": {
+    "@receipta/core": "workspace:*"
+  }
+}

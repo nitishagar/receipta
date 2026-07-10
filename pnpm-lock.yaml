@@ -45,6 +45,12 @@ importers:
         specifier: workspace:*
         version: link:../core
 
+  packages/cli:
+    dependencies:
+      '@receipta/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/core: {}
 
   packages/openai:
