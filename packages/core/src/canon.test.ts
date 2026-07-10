@@ -142,6 +142,18 @@ describe("canonicalize — RFC 8785 §3.2.2.2 string escaping", () => {
   });
 });
 
+describe("canonicalize — undefined member omission (JSON semantics)", () => {
+  it("omits object members whose value is undefined (like JSON.stringify)", () => {
+    // A receipt body commonly has optional fields (anchor, extensions) that are undefined when
+    // unset. These must be dropped, not serialized (undefined has no JSON representation).
+    expect(canonicalize({ a: 1, b: undefined, c: 3 })).toBe('{"a":1,"c":3}');
+  });
+
+  it("nested undefined members are omitted", () => {
+    expect(canonicalize({ outer: { x: undefined, y: 2 } })).toBe('{"outer":{"y":2}}');
+  });
+});
+
 describe("canonicalize — round-trip equivalence", () => {
   it("two logically-equal objects with different insertion order produce identical canonical bytes", () => {
     // This is the property the hash chain relies on: re-canonicalizing a receipt at verify time

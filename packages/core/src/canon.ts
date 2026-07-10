@@ -153,7 +153,10 @@ function hex4(cp: number): string {
 
 /** RFC 8785 §3.2.3 — object members sorted by UTF-16 code unit of the member name. */
 function serializeObject(obj: Record<string, Json>, out: string[]): void {
-  const keys = Object.keys(obj);
+  // Members whose value is `undefined` are not representable in JSON and are omitted, matching
+  // JSON.stringify semantics (which drops them). This lets callers spread optional fields without
+  // first stripping them out.
+  const keys = Object.keys(obj).filter((k) => obj[k] !== undefined);
   if (keys.length === 0) {
     out.push("{}");
     return;

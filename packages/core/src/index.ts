@@ -8,3 +8,6 @@
 export * from "./canon.js";
 export * from "./crypto.js";
 export * from "./schema.js";
+export * from "./store.js";
+export * from "./chain.js";
+export * from "./trust.js";

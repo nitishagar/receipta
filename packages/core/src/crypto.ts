@@ -8,7 +8,18 @@
  * All byte-oriented functions return `Uint8Array`. Internally we operate on Node `Buffer` (a
  * `Uint8Array` subclass) so the return values are directly usable as `Uint8Array`.
  */
-import { createPrivateKey, createPublicKey, generateKeyPairSync, createHmac, createHash, sign as cryptoSign, verify as cryptoVerify, type KeyObject, } from "node:crypto";
+import {
+  createPrivateKey,
+  createPublicKey,
+  generateKeyPairSync,
+  createHmac,
+  createHash,
+  sign as cryptoSign,
+  verify as cryptoVerify,
+} from "node:crypto";
+import type { KeyObject } from "node:crypto";
+
+export type { KeyObject };
 
 const SUITE = "ed25519" as const;
 

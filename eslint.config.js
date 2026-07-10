@@ -1,6 +1,7 @@
 // @ts-check
 import eslint from "@eslint/js";
 import tseslint from "typescript-eslint";
+import globals from "globals";
 
 /**
  * receipta root ESLint config (flat config, ESLint 9).
@@ -15,11 +16,17 @@ export default tseslint.config(
       "docs/.vitepress/dist/**",
       "docs/.vitepress/cache/**",
       "**/*.tsbuildinfo",
+      "packages/*/dist/**",
     ],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
     rules: {
       "@typescript-eslint/no-unused-vars": [
         "error",
