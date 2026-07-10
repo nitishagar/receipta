@@ -170,28 +170,167 @@ describe("chain — tamper detection names the first divergence (S1.5)", () => {
     expect(report.firstDivergence?.receiptSeq).toBe(3); // seq 3 follows seq 1 — gap detected
   });
 
-  it("reordering is detected via prev_hash mismatch (S1.5)", async () => {
+  it("reordering is detected via prev_hash mismatch and names the receipt + field (S1.5)", async () => {
     const dir = await freshDir("reorder");
     const receipts = await buildChain(dir, 3);
-    // Swap #2 and #3 (indices 1, 2). #2's prev_hash no longer follows #1's hash.
+    // Swap #2 and #3 (indices 1, 2). The receipt now at index 1 is the old #3; its prev_hash
+    // still points at #1's hash but its seq (3) ≠ expected (2). The seq check fires first.
     const tampered = [receipts[0]!, receipts[2]!, receipts[1]!];
     await rewriteLog(dir, tampered);
 
     const report = await verify(dir);
     expect(report.ok).toBe(false);
     expect(report.firstDivergence?.kind).toBe("tamper");
+    // S1.5 requires the FIRST divergence to be named precisely: the offending receipt + field.
+    expect(report.firstDivergence?.receiptSeq).toBe(3); // old #3 landed at position 2
+    expect(report.firstDivergence?.field).toBe("seq"); // seq 3 ≠ expected 2
   });
 
-  it("insertion is detected via seq mismatch (S1.5)", async () => {
+  it("insertion is detected via seq mismatch and names the receipt + field (S1.5)", async () => {
     const dir = await freshDir("insert");
     const receipts = await buildChain(dir, 2);
-    // Duplicate receipt #2 (index 1) — insert it again. seq 2 appears twice.
+    // Duplicate receipt #2 (index 1) — insert it again. seq 2 appears twice; the verifier sees
+    // seq 2 where it expected seq 3.
     const tampered = [receipts[0]!, receipts[1]!, receipts[1]!];
     await rewriteLog(dir, tampered);
 
     const report = await verify(dir);
     expect(report.ok).toBe(false);
     expect(report.firstDivergence?.kind).toBe("tamper");
+    // S1.5 requires the FIRST divergence to be named precisely: the offending receipt + field.
+    expect(report.firstDivergence?.receiptSeq).toBe(2); // duplicate seq 2 where 3 was expected
+    expect(report.firstDivergence?.field).toBe("seq");
+  });
+});
+
+describe("chain — schema/suite/critical-extension rejection (S1.8)", () => {
+  let kp: ReturnType<typeof generateKeyPair>;
+  let keyDir: string;
+
+  beforeEach(async () => {
+    kp = generateKeyPair();
+    keyDir = path.join(TMP, "keys-s18-" + Math.random().toString(36).slice(2));
+    await writeTrustedKey(keyDir, kp.keyId, exportPublicKey(kp.publicKey));
+  });
+
+  async function buildChain(dir: string, n: number): Promise<Receipt[]> {
+    const store = await openStore(path.join(dir, "log.receipta"));
+    const receipts = await appendN(store, kp, n);
+    await store.close();
+    return receipts;
+  }
+
+  async function rewriteLog(dir: string, receipts: Receipt[]): Promise<void> {
+    const logPath = path.join(dir, "log.receipta");
+    const { canonicalize } = await import("./canon.js");
+    const frames = receipts.map((r) => {
+      const bytes = Buffer.from(canonicalize(r as unknown as Record<string, unknown>), "utf8");
+      const frame = Buffer.alloc(4 + bytes.length + 1);
+      frame.writeUInt32BE(bytes.length, 0);
+      bytes.copy(frame, 4);
+      frame[frame.length - 1] = 0x0a;
+      return frame;
+    });
+    await writeFile(logPath, Buffer.concat(frames));
+  }
+
+  async function verify(dir: string) {
+    const root = await loadTrustRoot(keyDir);
+    return verifyChain(path.join(dir, "log.receipta"), resolverFromTrustRoot(root));
+  }
+
+  it("rejects an unknown schema_version and names the field (S1.8)", async () => {
+    const dir = await freshDir("badschema");
+    const receipts = await buildChain(dir, 2);
+    // Rewrite receipt #1's schema_version to a future/unknown value. The signature still covers
+    // the ORIGINAL canonical body, so re-signing is not needed to trip the schema_version check
+    // (it runs before signature verification).
+    receipts[0]!.body.schema_version = "receipta.v999" as ReceiptBody["schema_version"];
+    await rewriteLog(dir, receipts);
+
+    const report = await verify(dir);
+    expect(report.ok).toBe(false);
+    expect(report.firstDivergence?.kind).toBe("tamper");
+    expect(report.firstDivergence?.field).toBe("schema_version");
+    expect(report.firstDivergence?.receiptSeq).toBe(1);
+  });
+
+  it("rejects an unknown signature suite and names the field (S1.8)", async () => {
+    const dir = await freshDir("badsuite");
+    const receipts = await buildChain(dir, 2);
+    receipts[0]!.body.suite = "rsa-2048";
+    await rewriteLog(dir, receipts);
+
+    const report = await verify(dir);
+    expect(report.ok).toBe(false);
+    expect(report.firstDivergence?.kind).toBe("tamper");
+    expect(report.firstDivergence?.field).toBe("suite");
+    expect(report.firstDivergence?.receiptSeq).toBe(1);
+  });
+
+  it("rejects an unknown CRITICAL extension (S1.8 — must fail, not be silently ignored)", async () => {
+    const dir = await freshDir("critext");
+    const receipts = await buildChain(dir, 2);
+    // Add a critical extension the v0.1 verifier does not recognize. Per S1.8 this MUST fail.
+    receipts[1]!.body.extensions = { "future-anchor-proof": { critical: true, value: "deadbeef" } };
+    await rewriteLog(dir, receipts);
+
+    const report = await verify(dir);
+    expect(report.ok).toBe(false);
+    expect(report.firstDivergence?.kind).toBe("tamper");
+    expect(report.firstDivergence?.field).toBe("extensions.future-anchor-proof");
+    expect(report.firstDivergence?.receiptSeq).toBe(2);
+  });
+
+  it("ignores a non-critical unknown extension (forward compat, S1.8)", async () => {
+    const dir = await freshDir("noncritext");
+    const receipts = await buildChain(dir, 2);
+    // A non-critical extension must NOT break verification — but adding it changes the signed
+    // bytes, so the signature will no longer verify. To isolate the *extension* semantics we
+    // rebuild receipt #2 WITH the extension as part of its signed body (correct signature).
+    const signer = keyPairSigner(kp);
+    const base = mkBody({
+      seq: receipts[1]!.body.seq,
+      prevHash: receipts[0]!.body.prev_hash, // placeholder; overwritten by buildReceipt path
+      chainId: receipts[1]!.body.chain_id,
+      keyId: kp.keyId,
+    });
+    // Re-emit receipt #2 WITH a non-critical extension as part of its signed body, re-signing so
+    // the signature matches the new canonical bytes. The prev_hash must link onto #1's body hash.
+    const { receiptBodyHash } = await import("./schema.js");
+    const truePrev = receiptBodyHash(receipts[0]!.body);
+    const rebuilt2 = buildReceipt({
+      prevHash: truePrev,
+      seq: 2,
+      chainId: receipts[1]!.body.chain_id,
+      signer,
+      body: {
+        ...base,
+        timestamp: receipts[1]!.body.timestamp,
+        extensions: { "future-hint": { critical: false, value: "ok" } },
+      } as Omit<ReceiptBody, "schema_version" | "suite">,
+    });
+    await rewriteLog(dir, [receipts[0]!, rebuilt2]);
+
+    const report = await verify(dir);
+    // The non-critical extension is accepted; the chain verifies. (Confirms the verifier does
+    // NOT reject merely because an extension exists — only critical ones fail.)
+    expect(report.ok).toBe(true);
+    expect(report.verifiedCount).toBe(2);
+    expect(report.firstDivergence).toBeNull();
+  });
+
+  it("detects a chain_id change mid-chain and names the field", async () => {
+    const dir = await freshDir("chainidmismatch");
+    const receipts = await buildChain(dir, 3);
+    // Tamper receipt #2's chain_id to a foreign value. chain_id check (chain.ts) fires.
+    receipts[1]!.body.chain_id = "00000000-0000-0000-0000-000000000000";
+    await rewriteLog(dir, receipts);
+
+    const report = await verify(dir);
+    expect(report.ok).toBe(false);
+    expect(report.firstDivergence?.kind).toBe("tamper");
+    expect(report.firstDivergence?.field).toBe("chain_id");
   });
 });
 
