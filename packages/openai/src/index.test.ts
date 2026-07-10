@@ -235,6 +235,8 @@ describe("createReceiptFetch — receipt emission", () => {
     await setup.store.close();
 
     const report = await verifyStore(path.dirname(setup.store.path), setup.keyDir);
+    // S1.3: the receipt MUST remain valid when content is absent (only commitments + metadata).
+    expect(report.ok).toBe(true);
     const r = report.receipts[0]!;
     expect(r.body.content_captured).toBe(false);
     expect(r.body.capture_mode).toBe("metadata_only");

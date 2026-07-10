@@ -76,7 +76,9 @@ describe("receiptaTelemetry — receipt emission from the callback", () => {
 
   it("computes the output commitment over the FINAL ASSEMBLED output (S2.5), not chunks", async () => {
     // The callback fires ONCE with the fully-assembled content; there is no intermediate-chunk
-    // path. We verify the commitment matches the assembled content exactly.
+    // path. We assert the commitment is EXACTLY HMAC over the assembled bytes (recomputed
+    // independently) — a regression that committed over raw chunks (or over a different
+    // serialization of the content) would change the digest and fail this assertion.
     const tel = receiptaTelemetry({
       store: setup.store,
       signer: setup.kp,
@@ -88,8 +90,18 @@ describe("receiptaTelemetry — receipt emission from the callback", () => {
     await setup.store.close();
 
     const report = await verifyStore(setup.dir, setup.keyDir);
+    expect(report.ok).toBe(true);
     const r = report.receipts[0]!;
     expect(r.body.content?.response).toEqual(assembled);
+    // Recompute the expected commitment independently from the assembled bytes, using the
+    // store's commitment key (the HMAC key, D10). This proves the stored digest was derived
+    // from the assembled output, not from some intermediate form.
+    const { hmac, toHex } = await import("@receipta/core");
+    const expectedKey = Buffer.from(setup.store.meta.commitment_key, "hex");
+    const expectedResp = toHex(hmac(expectedKey, Buffer.from(JSON.stringify(assembled), "utf8")));
+    expect(r.body.content_commitments?.response).toBe(expectedResp);
+    // Sanity: the digest is a 64-hex-char string (not undefined / not a bare placeholder).
+    expect(r.body.content_commitments?.response).toMatch(/^[0-9a-f]{64}$/);
   });
 });
 
