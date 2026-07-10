@@ -1,0 +1,34 @@
+{
+  "name": "@receipta/openai",
+  "version": "0.1.0",
+  "description": "receipta integration for the OpenAI SDK — emits signed, hash-chained receipts for every chat completion.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "src", "README.md"],
+  "engines": { "node": ">=20" },
+  "publishConfig": { "access": "public", "provenance": true },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@receipta/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "openai": ">=5"
+  },
+  "peerDependenciesMeta": {
+    "openai": { "optional": true }
+  }
+}

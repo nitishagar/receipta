@@ -11,3 +11,4 @@ export * from "./schema.js";
 export * from "./store.js";
 export * from "./chain.js";
 export * from "./trust.js";
+export * from "./adapter-support.js";
