@@ -1,0 +1,43 @@
+{
+  "name": "receipta",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Tamper-evident receipts for every AI decision. Ed25519-signed, hash-chained, offline-verifiable.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@11.4.0",
+  "author": {
+    "name": "Nitish Agarwal",
+    "url": "https://github.com/nitishagar"
+  },
+  "homepage": "https://github.com/nitishagar/receipta",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nitishagar/receipta.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nitishagar/receipta/issues"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "build": "pnpm -r --filter=./packages/* run build",
+    "docs:build": "vitepress build docs",
+    "docs:dev": "vitepress dev docs",
+    "verify:demo": "pnpm --filter @receipta/cli run verify:demo"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@types/node": "^22.10.0",
+    "eslint": "^9.18.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.20.0",
+    "vitepress": "^1.6.3",
+    "vitest": "^2.1.9"
+  }
+}

@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Test / coverage
+coverage/
+*.lcov
+.vitest/
+
+# Logs
+*.log
+receipta-errors.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Receipta store artifacts (local stores should not be committed)
+*.receipta
+.store/
+receipta-store/
+
+# Trusted key material (private keys never committed)
+keys/*.key
+keys/*.pem
+!keys/*.pub
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# AI tooling local config (kept out of the public repo)
+.claude/
+.zcode/
+
+# VitePress build output
+docs/.vitepress/dist/
+docs/.vitepress/cache/
