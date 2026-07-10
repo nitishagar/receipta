@@ -1,0 +1,32 @@
+# Dependabot — keep npm deps and GitHub Actions current.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    groups:
+      typescript:
+        patterns:
+          - "typescript"
+          - "@types/*"
+          - "typescript-eslint"
+      eslint:
+        patterns:
+          - "eslint"
+          - "@eslint/js"
+          - "globals"
+      build:
+        patterns:
+          - "vitepress"
+          - "vitest"
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - github-actions

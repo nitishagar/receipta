@@ -1,0 +1,55 @@
+# Publish packages to npm with provenance attestations on version tags.
+# Uses npm native --provenance (SLSA-conformant via Sigstore) and trusted publishing (OIDC).
+# Fallback: per-package npm publish --provenance if pnpm -r publish errors (verified necessary).
+name: Publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.4.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: pnpm -r --filter=./packages/* run build
+
+      - name: Publish with provenance (pnpm)
+        run: pnpm -r publish --access public --provenance --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # Fallback: if pnpm -r publish errors on provenance, publish per-package.
+      - name: Publish with provenance (per-package fallback)
+        if: failure()
+        run: |
+          for pkg in packages/*/; do
+            if [ -f "$pkg/package.json" ]; then
+              (cd "$pkg" && npm publish --access public --provenance --tolerate-republish) || true
+            fi
+          done
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

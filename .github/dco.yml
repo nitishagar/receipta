@@ -1,0 +1,8 @@
+# DCO (Developer Certificate of Origin) config for the probot/dco app.
+# Enforces Signed-off-by: on every commit. Apache-2.0 inbound (no CLA).
+require:
+  members: true
+# Allow rebased commits to preserve their sign-off.
+allowRebaseCommits: true
+# Merge commits are not sign-off-verified individually (the commits within them are).
+# This keeps merge queues usable.
