@@ -26,6 +26,8 @@ import {
   type ProviderAdapter,
   type ReceiptCaptureConfig,
   type FetchLike,
+  type JsonValue,
+  parseSseEvents,
 } from "@receipta/core";
 import type { KeyPair } from "@receipta/core";
 
@@ -60,6 +62,49 @@ export const openaiProvider: ProviderAdapter = {
   },
   outcomeFromStatus(status) {
     return status >= 200 && status < 300 ? "success" : "error";
+  },
+  /**
+   * Assemble a ChatCompletion from buffered streaming chunks (D8, S2.5).
+   * OpenAI streams `choices[0].delta.content` fragments; concatenate them. The final chunk carries
+   * `finish_reason` and (if `stream_options.include_usage`) `usage`. Honors `include_usage`.
+   */
+  assembleStream(sseText) {
+    const events = parseSseEvents(sseText);
+    if (events.length === 0) return undefined;
+    let content = "";
+    let model: string | undefined;
+    let id: string | undefined;
+    let finishReason: string | undefined;
+    let usage: Record<string, unknown> | undefined;
+    for (const ev of events) {
+      if (!ev || typeof ev !== "object" || Array.isArray(ev)) continue;
+      const obj = ev as Record<string, unknown>;
+      if (typeof obj.id === "string") id = obj.id;
+      if (typeof obj.model === "string") model = obj.model;
+      const choices = obj.choices;
+      if (Array.isArray(choices) && choices.length > 0) {
+        const choice = choices[0] as Record<string, unknown> | undefined;
+        const delta = choice?.delta as Record<string, unknown> | undefined;
+        if (typeof delta?.content === "string") content += delta.content;
+        if (typeof choice?.finish_reason === "string") finishReason = choice.finish_reason;
+      }
+      if (obj.usage && typeof obj.usage === "object" && !Array.isArray(obj.usage)) {
+        usage = obj.usage as Record<string, unknown>;
+      }
+    }
+    return {
+      id: id ?? "stream",
+      object: "chat.completion",
+      model: model ?? "unknown",
+      choices: [
+        {
+          index: 0,
+          message: { role: "assistant", content },
+          finish_reason: finishReason ?? "stop",
+        },
+      ],
+      ...(usage ? { usage } : {}),
+    } as unknown as JsonValue;
   },
 };
 

@@ -288,6 +288,74 @@ describe("createReceiptFetch — receipt emission", () => {
   });
 });
 
+describe("createReceiptFetch — streaming assembly (D8, S2.5)", () => {
+  let setup: Awaited<ReturnType<typeof freshStore>>;
+
+  beforeEach(async () => {
+    setup = await freshStore();
+  });
+  afterEach(async () => {
+    await setup.store.close();
+  });
+
+  it("assembles the final message from buffered SSE chunks and commits over IT, not raw chunks", async () => {
+    // A streaming response: three SSE data chunks whose deltas concatenate to "Hello there!".
+    const sseBody = [
+      'data: {"id":"chatcmpl-s","model":"gpt-4o","choices":[{"index":0,"delta":{"role":"assistant","content":"Hello"},"finish_reason":null}]}',
+      "",
+      'data: {"id":"chatcmpl-s","model":"gpt-4o","choices":[{"index":0,"delta":{"content":" there!"},"finish_reason":null}]}',
+      "",
+      'data: {"id":"chatcmpl-s","model":"gpt-4o","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":4,"completion_tokens":3,"total_tokens":7}}',
+      "",
+      "data: [DONE]",
+      "",
+    ].join("\n");
+    const streamFetch: FetchLike = async () => {
+      const headers = new Headers({ "content-type": "text/event-stream" });
+      headers.set("x-request-id", "req-stream-1");
+      return new Response(sseBody, { status: 200, headers });
+    };
+    const wrappedFetch = createReceiptFetch(
+      openaiProvider,
+      { store: setup.store, signer: keyPairToSigner(setup.kp), actor: { type: "service", id: "app" } },
+      streamFetch,
+    );
+    await wrappedFetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({ model: "gpt-4o", messages: [], stream: true }),
+    });
+    await setup.store.close();
+
+    const report = await verifyStore(path.dirname(setup.store.path), setup.keyDir);
+    const r = report.receipts[0]!;
+    // The assembled content is the CONCATENATION of deltas — "Hello there!" — not raw chunks.
+    expect((r.body.content?.response as { choices: Array<{ message: { content: string } }> }).choices[0].message.content).toBe("Hello there!");
+    // Usage extracted from the final chunk (stream_options.include_usage).
+    expect(r.body.usage).toEqual({ input_tokens: 4, output_tokens: 3 });
+    expect(r.body.outcome).toBe("success");
+    // The commitment is over the assembled message bytes (deterministic regardless of chunking).
+    expect(r.body.content_commitments?.response).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("the streaming response is still consumable by the SDK after the wrapper reads the clone (S2.1)", async () => {
+    const sseBody = 'data: {"id":"x","model":"gpt-4o","choices":[{"index":0,"delta":{"content":"hi"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n';
+    const streamFetch: FetchLike = async () =>
+      new Response(sseBody, { status: 200, headers: { "content-type": "text/event-stream" } });
+    const wrappedFetch = createReceiptFetch(
+      openaiProvider,
+      { store: setup.store, signer: keyPairToSigner(setup.kp), actor: { type: "service", id: "app" } },
+      streamFetch,
+    );
+    const res = await wrappedFetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({ model: "gpt-4o", messages: [], stream: true }),
+    });
+    // The SDK consumes the original stream normally.
+    const text = await res.text();
+    expect(text).toBe(sseBody);
+  });
+});
+
 describe("createReceiptFetch — emission error isolation (S2.1)", () => {
   it("does NOT fail the wrapped call when receipt emission throws", async () => {
     const { store } = await freshStore();

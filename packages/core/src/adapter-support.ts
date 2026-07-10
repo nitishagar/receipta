@@ -47,6 +47,17 @@ export interface ProviderAdapter {
   extractModel(body: JsonValue): string | undefined;
   /** Extract a stable outcome from the HTTP status (e.g. success/error). */
   outcomeFromStatus(status: number): "success" | "error";
+  /**
+   * Assemble a final message from a buffered Server-Sent-Events stream (D8, S2.5).
+   *
+   * When the request is a streaming request (`stream: true`), the response body is a sequence of
+   * SSE `data:` chunks, NOT a single JSON object. The output commitment MUST be computed over the
+   * FINAL ASSEMBLED message, not the raw chunks. This method parses the SSE text the clone
+   * captured and returns the assembled message (e.g. the concatenated content + accumulated
+   * usage). Return undefined if assembly fails (the receipt then carries the raw text as a
+   * fallback, flagged via content_captured reflecting reality).
+   */
+  assembleStream?: (sseText: string) => JsonValue | undefined;
 }
 
 /** What the wrapper needs to build receipts. */
@@ -122,15 +133,24 @@ export function createReceiptFetch(
     }
 
     // 3. Clone the response and read the clone (S2.1: original stays unconsumed for the SDK).
+    // For STREAMING requests (D8, S2.5), the body is a sequence of SSE chunks — we buffer the
+    // whole stream and assemble the final message, so the output commitment is over the assembled
+    // result, not the raw chunks. For non-streaming, the body is a single JSON object.
+    const isStream = isStreamingRequest(requestBody) || isEventStreamResponse(response);
     let responseBody: JsonValue | undefined;
     let responseText: string | undefined;
     try {
       const clone = response.clone();
       responseText = await clone.text();
-      try {
-        responseBody = JSON.parse(responseText) as JsonValue;
-      } catch {
-        // Non-JSON response (e.g. an error page); keep responseText for the commitment.
+      if (isStream && provider.assembleStream) {
+        // D8: assemble the final message from the buffered SSE stream.
+        responseBody = provider.assembleStream(responseText);
+      } else {
+        try {
+          responseBody = JSON.parse(responseText) as JsonValue;
+        } catch {
+          // Non-JSON response (e.g. an error page); keep responseText for the commitment.
+        }
       }
     } catch {
       // Cloning/reading failed — the original response is still returned; receipt omits content.
@@ -255,6 +275,19 @@ function computeCommitments(
   return out;
 }
 
+/** Is this a streaming request (`stream: true` in the body)? */
+function isStreamingRequest(requestBody?: JsonValue): boolean {
+  if (requestBody === undefined) return false;
+  const stream = pick(requestBody, "stream");
+  return stream === true;
+}
+
+/** Is this an SSE response (content-type text/event-stream)? */
+function isEventStreamResponse(response: Response): boolean {
+  const ct = response.headers.get("content-type") ?? "";
+  return ct.includes("text/event-stream");
+}
+
 /** Read a property from a JSON object (case-insensitive on the top level). */
 function pick(obj: JsonValue, key: string): JsonValue | undefined {
   if (obj && typeof obj === "object" && !Array.isArray(obj)) {
@@ -285,6 +318,28 @@ function readAttemptIndex(init?: RequestInit): number | undefined {
   // The wrapper being invoked per-attempt is the attribution mechanism.
   void init;
   return undefined;
+}
+
+/**
+ * Parse a Server-Sent-Events text blob into an ordered list of JSON `data:` payloads.
+ * Lines beginning with `data:` carry the event payload; `data: [DONE]` terminates OpenAI streams.
+ * Blank lines separate events. This is the shared SSE framing both OpenAI and Anthropic use.
+ */
+export function parseSseEvents(sseText: string): JsonValue[] {
+  const events: JsonValue[] = [];
+  const lines = sseText.split("\n");
+  for (const line of lines) {
+    const trimmed = line.trimStart();
+    if (!trimmed.startsWith("data:")) continue;
+    const payload = trimmed.slice(5).trim();
+    if (payload === "" || payload === "[DONE]") continue;
+    try {
+      events.push(JSON.parse(payload) as JsonValue);
+    } catch {
+      // Skip unparseable chunks (e.g. partial/keepalive).
+    }
+  }
+  return events;
 }
 
 /** Convenience: build a signer from a core KeyPair. */

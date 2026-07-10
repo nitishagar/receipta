@@ -22,8 +22,10 @@ import {
   createReceiptFetch,
   keyPairToSigner,
   type FetchLike,
+  type JsonValue,
   type ProviderAdapter,
   type ReceiptCaptureConfig,
+  parseSseEvents,
 } from "@receipta/core";
 import type { KeyPair } from "@receipta/core";
 
@@ -57,6 +59,58 @@ export const anthropicProvider: ProviderAdapter = {
   },
   outcomeFromStatus(status) {
     return status >= 200 && status < 300 ? "success" : "error";
+  },
+  /**
+   * Assemble a Message from buffered streaming events (D8, S2.5).
+   * Anthropic streams event-typed chunks: `message_start` (model, input usage), `content_block_delta`
+   * (text fragments in `delta.text`), `message_delta` (output usage, stop_reason). Concatenate text
+   * and accumulate usage into the assembled Message shape.
+   */
+  assembleStream(sseText) {
+    const events = parseSseEvents(sseText);
+    if (events.length === 0) return undefined;
+    let text = "";
+    let model: string | undefined;
+    let id: string | undefined;
+    let stopReason: string | undefined;
+    let inputTokens: number | undefined;
+    let outputTokens: number | undefined;
+    for (const ev of events) {
+      if (!ev || typeof ev !== "object" || Array.isArray(ev)) continue;
+      const obj = ev as Record<string, unknown>;
+      const type = obj.type;
+      if (type === "message_start") {
+        const msg = obj.message as Record<string, unknown> | undefined;
+        if (msg) {
+          if (typeof msg.model === "string") model = msg.model;
+          if (typeof msg.id === "string") id = msg.id;
+          const u = msg.usage as Record<string, unknown> | undefined;
+          if (u) {
+            inputTokens = num(u.input_tokens) ?? inputTokens;
+          }
+        }
+      } else if (type === "content_block_delta") {
+        const delta = obj.delta as Record<string, unknown> | undefined;
+        if (delta && typeof delta.text === "string") text += delta.text;
+      } else if (type === "message_delta") {
+        const delta = obj.delta as Record<string, unknown> | undefined;
+        if (delta && typeof delta.stop_reason === "string") stopReason = delta.stop_reason;
+        const u = obj.usage as Record<string, unknown> | undefined;
+        if (u) outputTokens = num(u.output_tokens) ?? outputTokens;
+      }
+    }
+    return {
+      id: id ?? "msg_stream",
+      type: "message",
+      role: "assistant",
+      model: model ?? "unknown",
+      content: [{ type: "text", text }],
+      stop_reason: stopReason ?? "end_turn",
+      usage: {
+        input_tokens: inputTokens ?? 0,
+        output_tokens: outputTokens ?? 0,
+      },
+    } as unknown as JsonValue;
   },
 };
 

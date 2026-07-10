@@ -150,6 +150,13 @@ async function cmdVerify(positionals: string[], values: Record<string, unknown>)
           ``,
         ].join("\n"),
       );
+    } else {
+      // ok:false with no divergence and no receipts: the store is empty or missing. This is
+      // distinct from a tamper/torn-tail divergence, so we say so explicitly rather than exiting
+      // non-zero with no output (which leaves the user guessing).
+      process.stdout.write(
+        `✗ no verifiable receipts found in ${storePath} (empty or missing store).\n`,
+      );
     }
   }
 

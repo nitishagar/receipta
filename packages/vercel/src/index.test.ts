@@ -57,7 +57,7 @@ describe("receiptaTelemetry — receipt emission from the callback", () => {
       content: "The assembled answer.",
     });
     // appendBody is async; give it a tick to flush (it's fire-and-forget in the callback).
-    await new Promise((r) => setTimeout(r, 50));
+    await tel.flush();
     await setup.store.close();
 
     const report = await verifyStore(setup.dir, setup.keyDir);
@@ -84,7 +84,7 @@ describe("receiptaTelemetry — receipt emission from the callback", () => {
     });
     const assembled = { role: "assistant", content: "final assembled text" };
     tel.onLanguageModelCallEnd!({ model: "m", content: assembled, finishReason: "stop" });
-    await new Promise((r) => setTimeout(r, 50));
+    await tel.flush();
     await setup.store.close();
 
     const report = await verifyStore(setup.dir, setup.keyDir);
@@ -120,7 +120,7 @@ describe("receiptaTelemetry — metadata-only edge (S1.3, the load-bearing Verce
       usage: { promptTokens: 8, completionTokens: 4 },
       // content deliberately absent (recordOutputs=false)
     });
-    await new Promise((r) => setTimeout(r, 50));
+    await tel.flush();
     await setup.store.close();
 
     const report = await verifyStore(setup.dir, setup.keyDir);
@@ -145,7 +145,7 @@ describe("receiptaTelemetry — metadata-only edge (S1.3, the load-bearing Verce
       captureMode: "full",
     });
     tel.onLanguageModelCallEnd!({ model: "m", finishReason: "stop", content: undefined });
-    await new Promise((r) => setTimeout(r, 50));
+    await tel.flush();
     await setup.store.close();
 
     const report = await verifyStore(setup.dir, setup.keyDir);
@@ -162,7 +162,7 @@ describe("receiptaTelemetry — error outcome + emission isolation (S2.1)", () =
       actor: { type: "agent", id: "a" },
     });
     tel.onLanguageModelCallEnd!({ model: "m", finishReason: "error", content: undefined });
-    await new Promise((r) => setTimeout(r, 50));
+    await tel.flush();
     await setup.store.close();
 
     const report = await verifyStore(setup.dir, setup.keyDir);
@@ -181,7 +181,7 @@ describe("receiptaTelemetry — error outcome + emission isolation (S2.1)", () =
     });
     // The callback must not throw — it returns normally.
     expect(() => tel.onLanguageModelCallEnd!({ model: "m", content: "x", finishReason: "stop" })).not.toThrow();
-    await new Promise((r) => setTimeout(r, 50));
+    await tel.flush();
     expect(errors.some((m) => m.includes("failed to append receipt"))).toBe(true);
     await setup.store.close();
   });
@@ -206,7 +206,7 @@ describe("receiptaTelemetryV6 — v6 shim", () => {
       response: { id: "resp-v6-1" },
       model: "gpt-4o",
     });
-    await new Promise((r) => setTimeout(r, 50));
+    await v6.flush!();
     await setup.store.close();
 
     const report = await verifyStore(setup.dir, setup.keyDir);
@@ -216,5 +216,46 @@ describe("receiptaTelemetryV6 — v6 shim", () => {
     expect(r.body.usage).toEqual({ input_tokens: 3, output_tokens: 2 });
     expect(r.body.content_captured).toBe(true);
     expect(r.body.content?.response).toBe("v6 assembled answer");
+  });
+});
+
+describe("receiptaTelemetry — flush() drains pending receipts (the fire-and-forget race fix, F-2)", () => {
+  it("flush() ensures the receipt is durable before the store closes", async () => {
+    const setup = await freshStore();
+    const tel = receiptaTelemetry({
+      store: setup.store,
+      signer: setup.kp,
+      actor: { type: "agent", id: "a" },
+    });
+    tel.onLanguageModelCallEnd!({ model: "gpt-4o", content: "drained", finishReason: "stop" });
+    // Without flush, closing here could lose the receipt (the append is in-flight). With flush,
+    // we block until it lands.
+    await tel.flush();
+    await setup.store.close();
+
+    const report = await verifyStore(setup.dir, setup.keyDir);
+    expect(report.ok).toBe(true);
+    expect(report.receipts).toHaveLength(1);
+    expect(report.receipts[0]!.body.content?.response).toBe("drained");
+  });
+
+  it("flush() preserves emission-order even when multiple calls fire in quick succession", async () => {
+    const setup = await freshStore();
+    const tel = receiptaTelemetry({
+      store: setup.store,
+      signer: setup.kp,
+      actor: { type: "agent", id: "a" },
+    });
+    // Fire three callbacks back-to-back (the SDK may call them in sequence without awaiting).
+    tel.onLanguageModelCallEnd!({ model: "m", content: "first", finishReason: "stop" });
+    tel.onLanguageModelCallEnd!({ model: "m", content: "second", finishReason: "stop" });
+    tel.onLanguageModelCallEnd!({ model: "m", content: "third", finishReason: "stop" });
+    await tel.flush();
+    await setup.store.close();
+
+    const report = await verifyStore(setup.dir, setup.keyDir);
+    expect(report.receipts).toHaveLength(3);
+    // The chained emit preserves call order (seq 1, 2, 3).
+    expect(report.receipts.map((r) => r.body.content?.response)).toEqual(["first", "second", "third"]);
   });
 });

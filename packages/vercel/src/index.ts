@@ -81,22 +81,42 @@ export interface ReceiptaTelemetryConfig {
 }
 
 /**
+ * A telemetry integration that also exposes a `flush()` to await pending receipts.
+ *
+ * The SDK's callback contract is `(event) => void` — it does not await our work. So receipt
+ * emission is launched but not awaited. Call `flush()` before closing the store (or at the end of
+ * a request) to guarantee every pending receipt has landed durably. Without this, closing the
+ * store immediately after a generation can lose the final receipt(s).
+ */
+export interface ReceiptaTelemetryWithFlush extends ReceiptaTelemetry {
+  /** Await all in-flight receipt emissions. Resolves when the queue is drained. */
+  flush(): Promise<void>;
+}
+
+/**
  * Build a Telemetry integration that emits a receipt for each language-model call.
  *
  * Returns an object suitable for `registerTelemetry(receiptaTelemetry(cfg))`. The receipt is
  * built in `onLanguageModelCallEnd` (the per-call hook); `onEnd` is wired for completeness but the
  * canonical record is the per-call one (a generation maps 1:1 to a model call in the common case).
+ *
+ * Because the SDK callback is `(event) => void` (not awaited), emission is fire-and-forget. The
+ * returned object exposes `flush()` — call it before closing the store to drain pending receipts
+ * (otherwise the final receipt(s) of a generation can be lost).
  */
-export function receiptaTelemetry(config: ReceiptaTelemetryConfig): ReceiptaTelemetry {
+export function receiptaTelemetry(config: ReceiptaTelemetryConfig): ReceiptaTelemetryWithFlush {
   const captureMode = config.captureMode ?? "full";
   const logError = config.logError ?? defaultLogError;
   const signer = keyPairToSigner(config.signer);
   const commitmentKey = Buffer.from(config.store.meta.commitment_key, "hex");
 
+  // Track in-flight emissions so flush() can await them (the fire-and-forget race fix, F-2).
+  let pending: Promise<void> = Promise.resolve();
+
   const onLanguageModelCallEnd = (event: LanguageModelCallEndEvent) => {
     // Wrap emission: the callback runs inside the SDK's dispatch, so a throw would surface to the
-    // user's call (S2.1). Catch + log to sidecar.
-    emit(() => {
+    // user's call (S2.1). Catch + log to sidecar. Track the promise so flush() can drain it.
+    pending = emit(pending, () => {
       const model = event.model ?? "unknown";
       const provider = event.provider ?? "vercel-ai-sdk";
       const captured = captureMode === "full" && event.content !== undefined;
@@ -138,12 +158,43 @@ export function receiptaTelemetry(config: ReceiptaTelemetryConfig): ReceiptaTele
     }, logError);
   };
 
-  return { onLanguageModelCallEnd };
+  return {
+    onLanguageModelCallEnd,
+    async flush() {
+      // Await the tail of the pending-emissions chain. New emissions append to `pending` after
+      // this await starts; we drain the snapshot at call time (sufficient for "close the store
+      // after a generation" — no new emissions are expected once the SDK call has returned).
+      await pending;
+    },
+  };
 }
 
-/** Emit, catching any error. Returns the build/append function so the wrapper is shared. */
-function emit(build: () => Promise<unknown>, logError: (msg: string, err: unknown) => void): void {
-  void build().catch((err) => logError("failed to append receipt from telemetry callback", err));
+/**
+ * Emit, catching any error (S2.1). The build function may throw SYNCHRONOUSLY (e.g. a malformed
+ * content payload fails JSON.stringify before appendBody returns a promise), so we defer it into a
+ * promise chain with Promise.resolve().then(build) — this turns a synchronous throw into a
+ * rejection that `.catch` handles. Without this, a sync throw would propagate out of the callback
+ * into the SDK's dispatch and surface to the user's generateText/streamText.
+ *
+ * Returns the (extended) pending chain so callers can track in-flight emissions for flush().
+ */
+function emit(
+  prev: Promise<void>,
+  build: () => Promise<unknown>,
+  logError: (msg: string, err: unknown) => void,
+): Promise<void> {
+  // Chain on the previous pending emission so appends stay in chain order, and swallow errors so
+  // one failure doesn't reject the whole chain (each emit logs its own error).
+  const next = prev.then(
+    () => Promise.resolve().then(build),
+    () => Promise.resolve().then(build),
+  );
+  next.catch((err) => logError("failed to append receipt from telemetry callback", err));
+  // Convert to Promise<void> for the chain; a rejection was already logged above.
+  return next.then(
+    () => undefined,
+    () => undefined,
+  );
 }
 
 const defaultLogError = (msg: string, err: unknown) => {
@@ -166,6 +217,8 @@ export interface ReceiptaTelemetryV6 {
   options?: Record<string, unknown>;
   /** v6 finish callback (maps to onLanguageModelCallEnd). */
   onFinish?: (result: { finishReason?: string; usage?: { promptTokens?: number; completionTokens?: number }; text?: string; response?: { id?: string; messages?: unknown }; model?: string }) => void;
+  /** Await all in-flight receipt emissions (the fire-and-forget race fix). */
+  flush?: () => Promise<void>;
 }
 
 export function receiptaTelemetryV6(config: ReceiptaTelemetryConfig): ReceiptaTelemetryV6 {
@@ -182,6 +235,7 @@ export function receiptaTelemetryV6(config: ReceiptaTelemetryConfig): ReceiptaTe
         content: result.text ?? result.response?.messages,
       });
     },
+    flush: () => v7.flush(),
   };
 }
 

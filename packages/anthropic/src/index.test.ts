@@ -229,6 +229,55 @@ describe("anthropic adapter — receipt emission", () => {
   });
 });
 
+describe("anthropic adapter — streaming assembly (D8, S2.5)", () => {
+  let setup: Awaited<ReturnType<typeof freshStore>>;
+
+  beforeEach(async () => {
+    setup = await freshStore();
+  });
+  afterEach(async () => {
+    await setup.store.close();
+  });
+
+  it("assembles the final Message from buffered SSE events and commits over IT", async () => {
+    // Anthropic streams event-typed chunks: message_start, content_block_delta, message_delta.
+    const sseBody = [
+      'data: {"type":"message_start","message":{"id":"msg_s","model":"claude-3-5-sonnet-20241022","usage":{"input_tokens":6}}}',
+      "",
+      'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Hello "}}',
+      "",
+      'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"world!"}}',
+      "",
+      'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":4}}',
+      "",
+    ].join("\n");
+    const streamFetch: FetchLike = async () => {
+      const headers = new Headers({ "content-type": "text/event-stream" });
+      headers.set("request-id", "req-anthropic-stream");
+      return new Response(sseBody, { status: 200, headers });
+    };
+    const wrappedFetch = createReceiptFetch(
+      anthropicProvider,
+      { store: setup.store, signer: keyPairToSigner(setup.kp), actor: { type: "service", id: "app" } },
+      streamFetch,
+    );
+    await wrappedFetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      body: JSON.stringify({ model: "claude-3-5-sonnet-20241022", messages: [], stream: true }),
+    });
+    await setup.store.close();
+
+    const report = await verifyStore(path.dirname(setup.store.path), setup.keyDir);
+    const r = report.receipts[0]!;
+    // Assembled content = concatenation of text deltas.
+    const content = r.body.content?.response as { content: Array<{ text: string }> };
+    expect(content.content[0].text).toBe("Hello world!");
+    expect(r.body.usage).toEqual({ input_tokens: 6, output_tokens: 4 });
+    expect(r.body.model).toBe("claude-3-5-sonnet-20241022");
+    expect(r.body.request_id).toBe("req-anthropic-stream");
+  });
+});
+
 describe("anthropic adapter — emission error isolation (S2.1)", () => {
   it("does NOT fail the wrapped call when receipt emission throws", async () => {
     const { store } = await freshStore();
