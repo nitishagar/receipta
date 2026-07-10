@@ -15,7 +15,6 @@ import {
   openStore,
   appendBody,
   verifyChain,
-  keyPairSigner,
   loadTrustRoot,
   resolverFromTrustRoot,
   writeTrustedKey,

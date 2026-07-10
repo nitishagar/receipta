@@ -14,8 +14,8 @@
  * - Per-store identity (D3): a `chain_id` (random UUID) and a `commitment_key` (random 32 bytes,
  *   for HMAC commitments — D10) are created once on open and stored in a sidecar `.meta.json`.
  */
-import { open, readFile, writeFile, rename, mkdir } from "node:fs/promises";
-import { constants as fsConstants, createWriteStream, existsSync } from "node:fs";
+import { open, readFile, rename, mkdir, unlink } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { randomUUID, randomBytes } from "node:crypto";
 import * as path from "node:path";
 import { canonicalize } from "./canon.js";
@@ -107,16 +107,17 @@ class AsyncMutex {
 const appendMutex: AsyncMutex = new AsyncMutex();
 
 export async function appendReceipt(store: ReceiptStore, receipt: Receipt): Promise<string> {
-  // The receipt body's prev_hash MUST match the current tip, else the chain is broken. We check
-  // here so a misuse fails at append time rather than silently producing an unverifiable chain.
-  if (receipt.body.prev_hash !== store.lastHash) {
-    throw new Error(
-      `appendReceipt: receipt.prev_hash (${receipt.body.prev_hash}) does not match store tip ` +
-        `(${store.lastHash}); build receipts with buildReceipt using the current store tip.`,
-    );
-  }
-
+  // The prev_hash check runs INSIDE the mutex to avoid a TOCTOU race: a pre-built receipt's
+  // prev_hash could go stale between the check and the append if another append lands in between.
+  // (For the concurrency-safe path, prefer appendBody, which builds under the mutex.)
   return appendMutex.run(async () => {
+    if (receipt.body.prev_hash !== store.lastHash) {
+      throw new Error(
+        `appendReceipt: receipt.prev_hash (${receipt.body.prev_hash}) does not match store tip ` +
+          `(${store.lastHash}); build receipts with buildReceipt using the current store tip, ` +
+          `or use appendBody for the concurrency-safe path.`,
+      );
+    }
     const bytes = Buffer.from(canonicalize(receipt as unknown as Record<string, unknown>), "utf8");
     const frame = frameRecord(bytes);
     await atomicAppend(store.path, frame);
@@ -225,12 +226,25 @@ export async function* readAll(
       }
 
       const raw = Buffer.alloc(declaredLen);
-      await handle.read(raw, 0, declaredLen, recordStart);
+      const payloadRead = await handle.read(raw, 0, declaredLen, recordStart);
+      if (payloadRead.bytesRead < declaredLen) {
+        // The file shrank between the size check and the read (concurrent external truncation).
+        // Treat as a torn tail.
+        yield {
+          error: new Error(
+            `record ${index}: read ${payloadRead.bytesRead}/${declaredLen} payload bytes (store shrank mid-read)`,
+          ),
+          raw: raw.subarray(0, payloadRead.bytesRead),
+          index,
+          isLast: true,
+        };
+        return;
+      }
 
       // Verify terminator.
       const term = Buffer.alloc(1);
-      await handle.read(term, 0, 1, recordStart + declaredLen);
-      if (term[0] !== RECORD_TERMINATOR) {
+      const termRead = await handle.read(term, 0, 1, recordStart + declaredLen);
+      if (termRead.bytesRead < 1 || term[0] !== RECORD_TERMINATOR) {
         yield {
           error: new Error(
             `record ${index} missing 0x0a terminator (got 0x${(term[0] ?? 0).toString(16)})`,
@@ -319,9 +333,17 @@ async function loadOrCreateMeta(metaPath: string): Promise<StoreMeta> {
     commitment_key: randomBytes(32).toString("hex"),
     store_version: STORE_VERSION,
   };
-  // Write meta atomically too (temp → rename), so a crash mid-create can't leave a half meta.
+  // Write meta atomically (temp → fsync → rename), so a crash mid-create can't leave a half meta.
+  // fsync matches atomicAppend's durability contract (S2.4) — the chain_id/commitment_key must
+  // survive a crash to be reproducible.
   const tmp = metaPath + TMP_SUFFIX;
-  await writeFile(tmp, JSON.stringify(meta, null, 2), "utf8");
+  const tmpHandle = await open(tmp, "w");
+  try {
+    await tmpHandle.writeFile(JSON.stringify(meta, null, 2), "utf8");
+    await tmpHandle.sync();
+  } finally {
+    await tmpHandle.close();
+  }
   await rename(tmp, metaPath);
   return meta;
 }
@@ -350,27 +372,47 @@ async function scanTip(logPath: string, chainId: string): Promise<{ lastHash: st
 // ─── process lock (multi-process fail-loud, D3/S2.3) ────────────────────────────
 
 async function acquireLock(lockPath: string): Promise<void> {
-  // O_EXCL create: succeeds only if the file did not exist. This is the classic atomic lockfile.
+  // O_EXCL create via the "wx" flag: succeeds only if the file did not exist. This is the classic
+  // atomic lockfile. The 3rd arg to fs/promises open() is the file *mode* (0o600 = rw-------);
+  // "wx" already implies O_EXCL so no flag constant is needed alongside it.
+  let fh;
   try {
-    const fh = await open(lockPath, "wx", fsConstants.O_EXCL | 0o600);
+    fh = await open(lockPath, "wx", 0o600);
     await fh.writeFile(`${process.pid}\n`);
-    await fh.close();
-  } catch {
-    throw new Error(
-      `receipta store is locked by another writer: ${lockPath} exists.\n` +
-        `v0.1 is single-writer per store. If no other process is running, remove the lockfile manually.`,
-    );
+    await fh.sync(); // ensure the pid is durably written before we consider the lock held
+  } catch (e) {
+    // If we created the file but then failed to write, clean up the orphan so a later retry/open
+    // isn't permanently blocked by an empty lockfile.
+    if (fh) {
+      try {
+        await fh.close();
+      } catch {
+        /* ignore */
+      }
+      try {
+        await unlink(lockPath);
+      } catch {
+        /* ignore */
+      }
+    }
+    // Re-throw only if it's a genuine "already exists" (EEXIST); other errors (e.g. permission)
+    // are surfaced with context.
+    const code = (e as NodeJS.ErrnoException).code;
+    if (code === "EEXIST") {
+      throw new Error(
+        `receipta store is locked by another writer: ${lockPath} exists.\n` +
+          `v0.1 is single-writer per store. If no other process is running, remove the lockfile manually.`,
+      );
+    }
+    throw new Error(`acquireLock: could not create lockfile ${lockPath}: ${code ?? e}`);
   }
+  if (fh) await fh.close();
 }
 
 async function releaseLock(lockPath: string): Promise<void> {
   try {
-    const { unlink } = await import("node:fs/promises");
     await unlink(lockPath);
   } catch {
     // best-effort; an already-absent lock is fine
   }
 }
-
-// Suppress unused-import warning for createWriteStream (kept available for future streaming export).
-void createWriteStream;
