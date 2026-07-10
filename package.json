@@ -28,7 +28,7 @@
     "build": "pnpm -r --filter=./packages/* run build",
     "docs:build": "vitepress build docs",
     "docs:dev": "vitepress dev docs",
-    "verify:demo": "pnpm --filter @receipta/cli run verify:demo"
+    "verify:demo": "pnpm --filter @receipta/core build && node packages/core/scripts/verify-demo.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",

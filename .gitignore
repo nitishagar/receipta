@@ -23,6 +23,7 @@ pnpm-debug.log*
 *.receipta
 .store/
 receipta-store/
+.demo-store/
 
 # Trusted key material (private keys never committed)
 keys/*.key
