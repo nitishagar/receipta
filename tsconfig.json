@@ -1,4 +1,4 @@
 {
   "files": [],
-  "references": [{ "path": "packages/core" }, { "path": "packages/openai" }]
+  "references": [{ "path": "packages/core" }, { "path": "packages/openai" }, { "path": "packages/anthropic" }]
 }
