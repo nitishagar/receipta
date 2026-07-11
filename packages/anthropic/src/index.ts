@@ -35,8 +35,9 @@ import type { KeyPair } from "@receipta/core";
  */
 export const anthropicProvider: ProviderAdapter = {
   provider: "anthropic",
-  // Verified firsthand in @anthropic-ai/sdk (the request id header is `request-id`, line 565).
-  requestIdHeaders: ["request-id"],
+  // Ordered: first present header wins. api.anthropic.com sends `request-id` (verified firsthand
+  // in @anthropic-ai/sdk, line 565); the list also covers OpenAI-compatible gateways / proxies.
+  requestIdHeaders: ["request-id", "x-request-id", "anthropic-request-id"],
   extractUsage(body) {
     if (body && typeof body === "object" && !Array.isArray(body)) {
       const usage = (body as Record<string, unknown>).usage;

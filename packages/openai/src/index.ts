@@ -35,11 +35,14 @@ import type { KeyPair } from "@receipta/core";
  * The OpenAI provider adapter — how to read OpenAI-specific fields out of a response.
  *
  * ChatCompletion body shape: { id, model, choices: [{ finish_reason }], usage: { prompt_tokens,
- * completion_tokens } }. The request id is in the `x-request-id` header (verified firsthand).
+ * completion_tokens } }. The request id is in the `x-request-id` header for api.openai.com;
+ * the list also covers common OpenAI-compatible gateways (NVIDIA NIM `nvcf-reqid`, Azure
+ * `apim-request-id`/`x-ms-request-id`, Cloudflare `cf-ray`), checked in priority order.
  */
 export const openaiProvider: ProviderAdapter = {
   provider: "openai",
-  requestIdHeaders: ["x-request-id"],
+  // Ordered: first present header wins. api.openai.com sends x-request-id, so it stays first.
+  requestIdHeaders: ["x-request-id", "request-id", "nvcf-reqid", "apim-request-id", "x-ms-request-id", "cf-ray"],
   extractUsage(body) {
     if (body && typeof body === "object" && !Array.isArray(body)) {
       const usage = (body as Record<string, unknown>).usage;

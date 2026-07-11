@@ -73,6 +73,12 @@ export interface ReceiptCaptureConfig {
   logError?: (msg: string, err: unknown) => void;
   /** Optional commitment key override (defaults to the store's commitment_key). */
   commitmentKey?: Uint8Array;
+  /**
+   * Optional override merged over the built-in provider adapter (e.g. extra request-id headers
+   * for a gateway). Field-by-field: an override of `requestIdHeaders` REPLACES the list. Merged
+   * once at construction in `createReceiptFetch`, so the override is per-client (G1.2).
+   */
+  provider?: Partial<ProviderAdapter>;
 }
 
 const DEFAULT_ERROR_LOG = (msg: string, err: unknown) => {
@@ -93,6 +99,12 @@ export function createReceiptFetch(
   const captureMode = config.captureMode ?? "full";
   const logError = config.logError ?? DEFAULT_ERROR_LOG;
   const commitmentKey = config.commitmentKey ?? Buffer.from(config.store.meta.commitment_key, "hex");
+  // Merge the provider override once, at construction (G1.2). The override wins per field: a
+  // `requestIdHeaders` override REPLACES the builtin list (the caller knows their gateway). The
+  // builtin supplies every required field, so the merged object satisfies ProviderAdapter.
+  const effectiveProvider: ProviderAdapter = config.provider
+    ? { ...provider, ...config.provider }
+    : provider;
 
   return async (input, init) => {
     const requestStartTime = new Date();
@@ -118,7 +130,7 @@ export function createReceiptFetch(
     try {
       response = await baseFetch(input, init);
     } catch (err) {
-      await safeEmit(provider, config, logError, commitmentKey, {
+      await safeEmit(effectiveProvider, config, logError, commitmentKey, {
         requestStartTime,
         requestModel,
         requestBody,
@@ -142,9 +154,9 @@ export function createReceiptFetch(
     try {
       const clone = response.clone();
       responseText = await clone.text();
-      if (isStream && provider.assembleStream) {
+      if (isStream && effectiveProvider.assembleStream) {
         // D8: assemble the final message from the buffered SSE stream.
-        responseBody = provider.assembleStream(responseText);
+        responseBody = effectiveProvider.assembleStream(responseText);
       } else {
         try {
           responseBody = JSON.parse(responseText) as JsonValue;
@@ -157,10 +169,10 @@ export function createReceiptFetch(
     }
 
     // 4. Read the request id from headers (provider-specific).
-    const requestId = readRequestId(response, provider.requestIdHeaders);
+    const requestId = readRequestId(response, effectiveProvider.requestIdHeaders);
 
     // 5. Build + append the receipt (never throws into the call — S2.1).
-    await safeEmit(provider, config, logError, commitmentKey, {
+    await safeEmit(effectiveProvider, config, logError, commitmentKey, {
       requestStartTime,
       requestModel,
       requestBody,
@@ -168,7 +180,7 @@ export function createReceiptFetch(
       responseBody,
       responseText,
       requestId,
-      outcome: provider.outcomeFromStatus(response.status),
+      outcome: effectiveProvider.outcomeFromStatus(response.status),
       attemptIndex: readAttemptIndex(init),
       captureMode,
     }).catch(() => undefined);
