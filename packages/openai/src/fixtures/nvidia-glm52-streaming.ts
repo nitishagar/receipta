@@ -35,6 +35,7 @@ export const nvidiaGlm52Streaming = {
     request_id: "r-nvidia-glm52-001",
     usage: { input_tokens: 11, output_tokens: 2 },
     hasReasoningContent: true,
+    reasoningContent: "Thinking it through.",
     contentText: "Hello world",
   },
 } as const;

@@ -582,10 +582,8 @@ describe("gateway fidelity — assembler completeness (G2)", () => {
     const setup = await freshStore();
     const r = await driveFixture(nvidiaGlm52Streaming, setup.store, setup.kp, setup.keyDir);
     const msg = (r.body.content?.response as { choices: Array<{ message: Record<string, unknown> }> }).choices[0].message;
-    // FAILS today: delta.reasoning_content is dropped.
-    expect(msg.reasoning_content).toBe(nvidiaGlm52Streaming.expect.hasReasoningContent ? expect.any(String) : undefined);
-    expect(typeof msg.reasoning_content).toBe("string");
-    expect((msg.reasoning_content as string).length).toBeGreaterThan(0);
+    // Phase 3: delta.reasoning_content is now concatenated into the assembled message.
+    expect(msg.reasoning_content).toBe(nvidiaGlm52Streaming.expect.reasoningContent);
   });
 
   it("assembles tool_calls from fragmentary deltas by index (lost-update guard)", async () => {
