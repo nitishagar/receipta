@@ -1,6 +1,6 @@
 {
   "name": "@receipta/anthropic",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "receipta integration for the Anthropic SDK — emits signed, hash-chained receipts for every message.",
   "license": "Apache-2.0",
   "type": "module",
