@@ -58,5 +58,14 @@
     "lint": "eslint src",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nitishagar/receipta.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://nitishagar.github.io/receipta/",
+  "bugs": {
+    "url": "https://github.com/nitishagar/receipta/issues"
   }
 }

@@ -13,9 +13,18 @@
     },
     "./package.json": "./package.json"
   },
-  "files": ["dist", "src", "README.md"],
-  "engines": { "node": ">=20" },
-  "publishConfig": { "access": "public", "provenance": true },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "eslint src",
@@ -29,6 +38,17 @@
     "@anthropic-ai/sdk": ">=0.30"
   },
   "peerDependenciesMeta": {
-    "@anthropic-ai/sdk": { "optional": true }
+    "@anthropic-ai/sdk": {
+      "optional": true
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nitishagar/receipta.git",
+    "directory": "packages/anthropic"
+  },
+  "homepage": "https://nitishagar.github.io/receipta/",
+  "bugs": {
+    "url": "https://github.com/nitishagar/receipta/issues"
   }
 }

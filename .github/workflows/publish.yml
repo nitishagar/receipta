@@ -46,10 +46,12 @@ jobs:
       - name: Publish with provenance (per-package fallback)
         if: failure()
         run: |
+          status=0
           for pkg in packages/*/; do
             if [ -f "$pkg/package.json" ]; then
-              (cd "$pkg" && npm publish --access public --provenance --tolerate-republish) || true
+              (cd "$pkg" && npm publish --access public --provenance --tolerate-republish) || status=1
             fi
           done
+          exit $status
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

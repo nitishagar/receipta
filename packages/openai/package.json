@@ -13,9 +13,18 @@
     },
     "./package.json": "./package.json"
   },
-  "files": ["dist", "src", "README.md"],
-  "engines": { "node": ">=20" },
-  "publishConfig": { "access": "public", "provenance": true },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "eslint src",
@@ -29,6 +38,17 @@
     "openai": ">=5"
   },
   "peerDependenciesMeta": {
-    "openai": { "optional": true }
+    "openai": {
+      "optional": true
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nitishagar/receipta.git",
+    "directory": "packages/openai"
+  },
+  "homepage": "https://nitishagar.github.io/receipta/",
+  "bugs": {
+    "url": "https://github.com/nitishagar/receipta/issues"
   }
 }
