@@ -21,6 +21,7 @@ import {
   openaiReasoningToolStreaming,
   openaiNoUsageStreaming,
   openai2xxBodyError,
+  openaiLegacyFnMultichoiceStreaming,
   openaiStreamingFixtures,
 } from "./fixtures/index.js";
 
@@ -594,6 +595,22 @@ describe("gateway fidelity — assembler completeness (G2)", () => {
     expect(msg.reasoning_content).toBe(openaiReasoningToolStreaming.expect.reasoningContent);
     const toolCalls = msg.tool_calls as Array<Record<string, unknown>> | undefined;
     expect(toolCalls).toEqual(openaiReasoningToolStreaming.expect.toolCalls);
+  });
+
+  it("assembles legacy function_call AND all choices (not only choices[0]) (G2.1)", async () => {
+    const setup = await freshStore();
+    const r = await driveFixture(openaiLegacyFnMultichoiceStreaming, setup.store, setup.kp, setup.keyDir);
+    const choices = (r.body.content?.response as { choices: Array<{ index: number; message: Record<string, unknown>; finish_reason: string }> }).choices;
+    // G2.1 "ALL choices, not only choices[0]": two distinct indices assembled.
+    expect(choices).toHaveLength(openaiLegacyFnMultichoiceStreaming.expect.choiceCount);
+    expect(choices.map((c) => c.index)).toEqual([0, 1]);
+    // G2.1 legacy function_call: name set once, arguments concatenated from fragments.
+    const choice0 = choices.find((c) => c.index === 0)!;
+    expect(choice0.message.function_call).toEqual(openaiLegacyFnMultichoiceStreaming.expect.functionCall);
+    // The second choice's content + finish_reason survived.
+    const choice1 = choices.find((c) => c.index === 1)!;
+    expect(choice1.message.content).toBe(openaiLegacyFnMultichoiceStreaming.expect.choice1Content);
+    expect(choice1.finish_reason).toBe(openaiLegacyFnMultichoiceStreaming.expect.choice1FinishReason);
   });
 });
 

@@ -5,9 +5,15 @@
  */
 export { anthropicThinkingToolStreaming } from "./anthropic-thinking-tool-streaming.js";
 export { anthropicNoUsageStreaming } from "./anthropic-no-usage-streaming.js";
+export { anthropicRedactedStreaming } from "./anthropic-redacted-streaming.js";
 
 import { anthropicThinkingToolStreaming } from "./anthropic-thinking-tool-streaming.js";
 import { anthropicNoUsageStreaming } from "./anthropic-no-usage-streaming.js";
+import { anthropicRedactedStreaming } from "./anthropic-redacted-streaming.js";
 
 /** All streaming fixtures for the fidelity property + parameterized driver. */
-export const anthropicStreamingFixtures = [anthropicThinkingToolStreaming, anthropicNoUsageStreaming];
+export const anthropicStreamingFixtures = [
+  anthropicThinkingToolStreaming,
+  anthropicNoUsageStreaming,
+  anthropicRedactedStreaming,
+];

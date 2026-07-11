@@ -18,6 +18,7 @@ import { anthropicProvider, withReceipts } from "./index.js";
 import {
   anthropicThinkingToolStreaming,
   anthropicNoUsageStreaming,
+  anthropicRedactedStreaming,
   anthropicStreamingFixtures,
 } from "./fixtures/index.js";
 
@@ -424,6 +425,20 @@ describe("anthropic gateway fidelity — assembler completeness (G2.2)", () => {
     expect(toolUse?.name).toBe(anthropicThinkingToolStreaming.expect.toolUse.name);
     expect(toolUse?.input).toEqual(anthropicThinkingToolStreaming.expect.toolUse.input);
   });
+
+  it("assembles redacted_thinking blocks in order with their data (G2.2)", async () => {
+    const setup = await freshStore();
+    const r = await driveFixture(anthropicRedactedStreaming, setup.store, setup.kp, setup.keyDir);
+    const content = r.body.content?.response as { content: Array<Record<string, unknown>> };
+    const blocks = content.content;
+    // G2.2 block ordering: redacted_thinking first, then text.
+    expect(blocks.map((b) => b.type)).toEqual(anthropicRedactedStreaming.expect.blockTypes);
+    const redacted = blocks.find((b) => b.type === "redacted_thinking") as Record<string, unknown> | undefined;
+    // The redacted `data` must survive into the assembled block.
+    expect(redacted?.data).toBe(anthropicRedactedStreaming.expect.redactedData);
+    const text = blocks.find((b) => b.type === "text") as Record<string, unknown> | undefined;
+    expect(text?.text).toBe(anthropicRedactedStreaming.expect.textText);
+  });
 });
 
 describe("anthropic gateway fidelity — honest usage absence (G3.1)", () => {
@@ -488,6 +503,9 @@ function isDeltaTypeRepresented(deltaType: string, assembledStr: string): boolea
       return assembledStr.includes('"type":"text"');
     case "thinking_delta":
       return assembledStr.includes('"type":"thinking"');
+    case "redacted_thinking_delta":
+      // represented as a redacted_thinking block in the assembled content array.
+      return assembledStr.includes('"type":"redacted_thinking"');
     case "input_json_delta":
       // represented as a tool_use block with parsed input.
       return assembledStr.includes('"type":"tool_use"');

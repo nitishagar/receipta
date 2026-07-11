@@ -9,11 +9,13 @@ export { nvidiaLlamaStreaming } from "./nvidia-llama-streaming.js";
 export { openaiReasoningToolStreaming } from "./openai-reasoning-tool-streaming.js";
 export { openaiNoUsageStreaming } from "./openai-no-usage-streaming.js";
 export { openai2xxBodyError } from "./openai-2xx-body-error.js";
+export { openaiLegacyFnMultichoiceStreaming } from "./openai-legacy-fn-multichoice-streaming.js";
 
 import { nvidiaGlm52Streaming } from "./nvidia-glm52-streaming.js";
 import { nvidiaLlamaStreaming } from "./nvidia-llama-streaming.js";
 import { openaiReasoningToolStreaming } from "./openai-reasoning-tool-streaming.js";
 import { openaiNoUsageStreaming } from "./openai-no-usage-streaming.js";
+import { openaiLegacyFnMultichoiceStreaming } from "./openai-legacy-fn-multichoice-streaming.js";
 
 /** All streaming fixtures for the fidelity property + parameterized driver. */
 export const openaiStreamingFixtures = [
@@ -21,4 +23,5 @@ export const openaiStreamingFixtures = [
   nvidiaLlamaStreaming,
   openaiReasoningToolStreaming,
   openaiNoUsageStreaming,
+  openaiLegacyFnMultichoiceStreaming,
 ];
