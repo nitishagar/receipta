@@ -57,10 +57,32 @@ responses are assembled before the output commitment is computed.
 
 ## What gets captured
 
-- `model` and `usage` (`input_tokens`/`output_tokens`)
-- `request_id` from the `request-id` header
-- `outcome` (`success` for 2xx, `error` otherwise), one receipt per attempt
+- `model` and `usage` (`input_tokens`/`output_tokens`); when no usage events are sent, `usage`
+  is `undefined` (honest absence, never fabricated to `0`)
+- `request_id` from an ordered header list (`request-id` first, then `x-request-id`,
+  `anthropic-request-id`) covering api.anthropic.com and proxies/gateways
+- `outcome` (`success` for 2xx, `error` otherwise); a 2xx body carrying a top-level `error`
+  object is recorded as `error` too (gateway soft-failure). One receipt per attempt.
 - request + response content when `captureMode: "full"`, with keyed HMAC-SHA256 commitments
+- streaming: the output commitment is computed over the **final assembled** message, including
+  `thinking`, `redacted_thinking`, and `tool_use` blocks (not just visible text), so the
+  commitment covers reasoning and tool output
+
+## Gateway compatibility
+
+This adapter detects `request_id` from an ordered header list. If your gateway or proxy (e.g.
+Bedrock/Vertex-fronted Claude) uses a nonstandard header, pass the full list via the `provider`
+override — no fork, no copy of the assembler:
+
+```ts
+const client = withReceipts(Anthropic, { apiKey }, {
+  store,
+  signer,
+  actor: { type: "service", id: "my-app" },
+  // Override REPLACES the default list — include the headers you want checked, in priority order.
+  provider: { requestIdHeaders: ["x-bedrock-request-id", "request-id"] },
+});
+```
 
 ## Docs
 

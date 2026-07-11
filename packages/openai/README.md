@@ -54,10 +54,50 @@ appends a signed receipt. Emission is wrapped in try/catch and never throws into
 ## What gets captured
 
 - `model` and `usage` (`prompt_tokens`/`completion_tokens` → `input_tokens`/`output_tokens`)
-- `request_id` from the `x-request-id` header
-- `outcome` (`success` for 2xx, `error` otherwise), one receipt per attempt
+- `request_id` from an ordered header list (`x-request-id` first, then `request-id`,
+  `nvcf-reqid`, `apim-request-id`, `x-ms-request-id`, `cf-ray`) covering api.openai.com and
+  common OpenAI-compatible gateways
+- `outcome` (`success` for 2xx, `error` otherwise); a 2xx body carrying a top-level `error`
+  object is recorded as `error` too (gateway soft-failure). One receipt per attempt.
 - request + response content when `captureMode: "full"`, with keyed HMAC-SHA256 commitments
-- streaming: the output commitment is computed over the **final assembled** message, not raw SSE chunks
+- streaming: the output commitment is computed over the **final assembled** message, not raw SSE
+  chunks — including `reasoning_content`, `tool_calls`, and `function_call` (not just visible
+  text), so the commitment covers reasoning and tool output
+
+## Gateway compatibility
+
+This adapter works against any OpenAI-compatible endpoint (NVIDIA NIM, Azure OpenAI,
+Cloudflare AI Gateway, vLLM, LiteLLM, OpenRouter, …), not just api.openai.com.
+
+**Request id.** The wrapper detects `request_id` from an ordered header list (above). If your
+gateway uses a nonstandard header, pass the full list via the `provider` override — no fork, no
+copy of the assembler:
+
+```ts
+const client = withReceipts(OpenAI, { apiKey, baseURL: "https://integrate.api.nvidia.com/v1" }, {
+  store,
+  signer,
+  actor: { type: "service", id: "my-app" },
+  // Override REPLACES the default list — include the headers you want checked, in priority order.
+  provider: { requestIdHeaders: ["my-gateway-req-id", "x-request-id"] },
+});
+```
+
+**Streaming usage.** Whether a usage chunk is emitted at all is provider/model-dependent (e.g.
+some NVIDIA NIM models omit it unless asked). To capture token usage on streaming calls, set
+`stream_options: { include_usage: true }` in your request — the wrapper does **not** inject this
+(it must not alter your request) and will capture usage when the provider sends it:
+
+```ts
+await client.chat.completions.create({
+  model: "z-ai/glm-5.2",
+  messages: [{ role: "user", content: "Hello" }],
+  stream: true,
+  stream_options: { include_usage: true }, // opt in — the wrapper captures the usage chunk
+});
+```
+
+When no usage chunk arrives, the receipt records `usage: undefined` (honest absence), never `0`.
 
 ## Docs
 
