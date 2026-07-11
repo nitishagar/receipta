@@ -15,6 +15,14 @@ import {
   keyPairToSigner,
 } from "@receipta/core";
 import { openaiProvider, withReceipts } from "./index.js";
+import {
+  nvidiaGlm52Streaming,
+  nvidiaLlamaStreaming,
+  openaiReasoningToolStreaming,
+  openaiNoUsageStreaming,
+  openai2xxBodyError,
+  openaiStreamingFixtures,
+} from "./fixtures/index.js";
 
 const TMP = path.join(process.cwd(), ".vitest-tmp", "openai");
 
@@ -440,3 +448,251 @@ describe("withReceipts — constructor wrapping", () => {
     await store.close();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Gateway fidelity — recorded-trace corpus (G1–G6), TDD red in Phase 1.
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a mock fetch that replays a recorded-trace fixture's raw bytes + full header map.
+ * Sibling to `makeMockFetch` (kept for back-compat with the canonical tests above).
+ */
+function makeTraceFetch(fixture: {
+  streaming?: boolean;
+  sseText?: string;
+  body?: unknown;
+  headers: Record<string, string>;
+  status?: number;
+}): { fetch: FetchLike; calls: Array<{ url: unknown; init?: RequestInit }> } {
+  const calls: Array<{ url: unknown; init?: RequestInit }> = [];
+  const bodyText = fixture.streaming ? fixture.sseText! : JSON.stringify(fixture.body);
+  const fetch: FetchLike = async (input, init) => {
+    calls.push({ url: input, init });
+    return new Response(bodyText, { status: fixture.status ?? 200, headers: fixture.headers });
+  };
+  return { fetch, calls };
+}
+
+/** Drive a fixture through createReceiptFetch and return the single emitted receipt. */
+async function driveFixture(fixture: {
+  streaming?: boolean;
+  sseText?: string;
+  body?: unknown;
+  headers: Record<string, string>;
+  status?: number;
+}, store: ReceiptStore, kp: ReturnType<typeof generateKeyPair>, keyDir: string) {
+  const { fetch: traceFetch } = makeTraceFetch(fixture);
+  const wrappedFetch = createReceiptFetch(
+    openaiProvider,
+    { store, signer: keyPairToSigner(kp), actor: { type: "service", id: "app" } },
+    traceFetch,
+  );
+  const reqBody = fixture.streaming ? { model: "gpt-4o", messages: [], stream: true } : { model: "gpt-4o", messages: [] };
+  await wrappedFetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    body: JSON.stringify(reqBody),
+  });
+  await store.close();
+  const root = await loadTrustRoot(keyDir);
+  const report = await verifyChain(store.path, resolverFromTrustRoot(root));
+  return report.receipts[0]!;
+}
+
+describe("gateway fidelity — request_id capture across gateways (G1)", () => {
+  it("NVIDIA nvcf-reqid header is captured as request_id", async () => {
+    const setup = await freshStore();
+    const r = await driveFixture(nvidiaGlm52Streaming, setup.store, setup.kp, setup.keyDir);
+    // FAILS today: nvcf-reqid not in requestIdHeaders. Phase 2 widens the list.
+    expect(r.body.request_id).toBe(nvidiaGlm52Streaming.expect.request_id);
+  });
+
+  it("request_id is undefined when no known header is present (negative-space, G1.3)", async () => {
+    const setup = await freshStore();
+    const { fetch: traceFetch } = makeTraceFetch({
+      streaming: true,
+      sseText: openaiNoUsageStreaming.sseText,
+      // No request-id header at all.
+      headers: { "content-type": "text/event-stream" },
+    });
+    const wrappedFetch = createReceiptFetch(
+      openaiProvider,
+      { store: setup.store, signer: keyPairToSigner(setup.kp), actor: { type: "service", id: "app" } },
+      traceFetch,
+    );
+    await wrappedFetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({ model: "gpt-4o", messages: [], stream: true }),
+    });
+    await setup.store.close();
+    const root = await loadTrustRoot(setup.keyDir);
+    const report = await verifyChain(setup.store.path, resolverFromTrustRoot(root));
+    // Honest absence — never fabricated. (Passes today; regression guard.)
+    expect(report.receipts[0]!.body.request_id).toBeUndefined();
+  });
+
+  it("withReceipts accepts a provider override adding a custom request-id header (G1.2)", async () => {
+    const setup = await freshStore();
+    const { fetch: traceFetch } = makeTraceFetch({
+      streaming: true,
+      sseText: openaiNoUsageStreaming.sseText,
+      // A gateway header not in the default list.
+      headers: { "content-type": "text/event-stream", "x-custom-req-id": "custom-req-999" },
+    });
+    // Override the provider via the capture config — no fork, one-line ergonomics preserved.
+    const wrappedFetch = createReceiptFetch(
+      openaiProvider,
+      {
+        store: setup.store,
+        signer: keyPairToSigner(setup.kp),
+        actor: { type: "service", id: "app" },
+        provider: { requestIdHeaders: ["x-custom-req-id", ...openaiProvider.requestIdHeaders] },
+      },
+      traceFetch,
+    );
+    await wrappedFetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({ model: "gpt-4o", messages: [], stream: true }),
+    });
+    await setup.store.close();
+    const root = await loadTrustRoot(setup.keyDir);
+    const report = await verifyChain(setup.store.path, resolverFromTrustRoot(root));
+    // FAILS today: ReceiptCaptureConfig has no `provider` override seam. Phase 2 adds it.
+    expect(report.receipts[0]!.body.request_id).toBe("custom-req-999");
+  });
+});
+
+describe("gateway fidelity — usage capture (G3)", () => {
+  it("captures usage from a final choices:[] usage chunk (NVIDIA llama — regression guard)", async () => {
+    const setup = await freshStore();
+    const r = await driveFixture(nvidiaLlamaStreaming, setup.store, setup.kp, setup.keyDir);
+    // PASSES today (assembler reads usage from any chunk incl. choices:[]). Pins the working case.
+    expect(r.body.usage).toEqual(nvidiaLlamaStreaming.expect.usage);
+  });
+
+  it("usage is undefined when no usage chunk is sent (honest absence)", async () => {
+    const setup = await freshStore();
+    const r = await driveFixture(openaiNoUsageStreaming, setup.store, setup.kp, setup.keyDir);
+    // OpenAI is already honest. Passes today; regression guard (never fabricate 0/0).
+    expect(r.body.usage).toBeUndefined();
+  });
+});
+
+describe("gateway fidelity — assembler completeness (G2)", () => {
+  it("assembles reasoning_content into the message", async () => {
+    const setup = await freshStore();
+    const r = await driveFixture(nvidiaGlm52Streaming, setup.store, setup.kp, setup.keyDir);
+    const msg = (r.body.content?.response as { choices: Array<{ message: Record<string, unknown> }> }).choices[0].message;
+    // FAILS today: delta.reasoning_content is dropped.
+    expect(msg.reasoning_content).toBe(nvidiaGlm52Streaming.expect.hasReasoningContent ? expect.any(String) : undefined);
+    expect(typeof msg.reasoning_content).toBe("string");
+    expect((msg.reasoning_content as string).length).toBeGreaterThan(0);
+  });
+
+  it("assembles tool_calls from fragmentary deltas by index (lost-update guard)", async () => {
+    const setup = await freshStore();
+    const r = await driveFixture(openaiReasoningToolStreaming, setup.store, setup.kp, setup.keyDir);
+    const msg = (r.body.content?.response as { choices: Array<{ message: Record<string, unknown> }> }).choices[0].message;
+    // FAILS today: delta.tool_calls is dropped entirely.
+    expect(msg.reasoning_content).toBe(openaiReasoningToolStreaming.expect.reasoningContent);
+    const toolCalls = msg.tool_calls as Array<Record<string, unknown>> | undefined;
+    expect(toolCalls).toEqual(openaiReasoningToolStreaming.expect.toolCalls);
+  });
+});
+
+describe("gateway fidelity — body-aware outcome (G4)", () => {
+  it("a 2xx response with a top-level error body records outcome error", async () => {
+    const setup = await freshStore();
+    const r = await driveFixture(openai2xxBodyError, setup.store, setup.kp, setup.keyDir);
+    // FAILS today: outcomeFromStatus(200) === "success". Phase 4 inspects the body.
+    expect(r.body.outcome).toBe(openai2xxBodyError.expect.outcome);
+    expect(r.body.request_id).toBe(openai2xxBodyError.expect.request_id);
+  });
+
+  it("a 2xx response with a NON-error JSON body still records outcome success (G4.2)", async () => {
+    const setup = await freshStore();
+    // A normal success body (no top-level error field) must stay "success".
+    const r = await driveFixture(
+      { streaming: false, body: CHAT_COMPLETION_BODY, headers: { "content-type": "application/json", "x-request-id": "ok-1" } },
+      setup.store,
+      setup.kp,
+      setup.keyDir,
+    );
+    expect(r.body.outcome).toBe("success");
+  });
+});
+
+describe("gateway fidelity — fidelity property (G6.3)", () => {
+  // For each streaming fixture, every distinct `delta` payload field in the SSE input MUST be
+  // represented in the assembled body (or in an explicit allowlist of known-dropped fields).
+  // The known-dropped allowlist is EMPTY after Phase 3 completes the assembler. During Phase 1
+  // (red), the test fails for any fixture whose deltas include a field the assembler drops today
+  // (reasoning_content / tool_calls) — which is exactly the contract being driven.
+  const KNOWN_DROPPED: ReadonlySet<string> = new Set<string>([]);
+
+  it.each(openaiStreamingFixtures.map((f) => [f.name, f] as const))(
+    "every delta field in %s is represented in the assembled body",
+    async (_name, fixture) => {
+      const setup = await freshStore();
+      const r = await driveFixture(fixture, setup.store, setup.kp, setup.keyDir);
+      const assembled = r.body.content?.response as Record<string, unknown> | undefined;
+      // Collect every distinct delta field across the fixture's data: payloads.
+      const deltaFields = collectDeltaFields(fixture.sseText!);
+      // Build a stringified view of the assembled body for representation checks.
+      const assembledStr = JSON.stringify(assembled ?? {});
+      const unrepresented: string[] = [];
+      for (const field of deltaFields) {
+        if (KNOWN_DROPPED.has(field)) continue;
+        if (!isFieldRepresented(field, assembledStr)) {
+          unrepresented.push(field);
+        }
+      }
+      expect(unrepresented).toEqual([]);
+    },
+  );
+});
+
+/** Collect every distinct key appearing in any `delta` object across the fixture's SSE stream. */
+function collectDeltaFields(sseText: string): string[] {
+  const fields = new Set<string>();
+  for (const line of sseText.split("\n")) {
+    const trimmed = line.trimStart();
+    if (!trimmed.startsWith("data:")) continue;
+    const payload = trimmed.slice(5).trim();
+    if (!payload || payload === "[DONE]") continue;
+    try {
+      const obj = JSON.parse(payload) as Record<string, unknown>;
+      // choice-level deltas (OpenAI): choices[].delta
+      if (Array.isArray(obj.choices)) {
+        for (const c of obj.choices as Array<Record<string, unknown>>) {
+          const delta = c.delta as Record<string, unknown> | undefined;
+          if (delta && typeof delta === "object") {
+            for (const k of Object.keys(delta)) fields.add(k);
+          }
+        }
+      }
+    } catch {
+      // skip unparseable
+    }
+  }
+  return [...fields];
+}
+
+/**
+ * Is a given OpenAI delta field represented in the assembled body?
+ * Maps the stream field name to its assembled representation.
+ */
+function isFieldRepresented(field: string, assembledStr: string): boolean {
+  switch (field) {
+    case "content":
+    case "reasoning_content":
+    case "tool_calls":
+    case "function_call":
+      return assembledStr.includes(field);
+    case "role":
+      // role is always represented in the assembled message.
+      return true;
+    default:
+      // Any other delta field: require it to appear in the assembled body string.
+      return assembledStr.includes(field);
+  }
+}

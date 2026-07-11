@@ -15,6 +15,11 @@ import {
   keyPairToSigner,
 } from "@receipta/core";
 import { anthropicProvider, withReceipts } from "./index.js";
+import {
+  anthropicThinkingToolStreaming,
+  anthropicNoUsageStreaming,
+  anthropicStreamingFixtures,
+} from "./fixtures/index.js";
 
 const TMP = path.join(process.cwd(), ".vitest-tmp", "anthropic");
 
@@ -324,3 +329,169 @@ describe("anthropic adapter — withReceipts constructor wrapping", () => {
     await store.close();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Gateway fidelity — recorded-trace corpus (G1–G6), TDD red in Phase 1.
+// ---------------------------------------------------------------------------
+
+/** Build a mock fetch that replays a recorded-trace fixture's raw bytes + full header map. */
+function makeTraceFetch(fixture: {
+  streaming?: boolean;
+  sseText?: string;
+  body?: unknown;
+  headers: Record<string, string>;
+  status?: number;
+}): { fetch: FetchLike; calls: Array<{ url: unknown; init?: RequestInit }> } {
+  const calls: Array<{ url: unknown; init?: RequestInit }> = [];
+  const bodyText = fixture.streaming ? fixture.sseText! : JSON.stringify(fixture.body);
+  const fetch: FetchLike = async (input, init) => {
+    calls.push({ url: input, init });
+    return new Response(bodyText, { status: fixture.status ?? 200, headers: fixture.headers });
+  };
+  return { fetch, calls };
+}
+
+/** Drive a fixture through createReceiptFetch and return the single emitted receipt. */
+async function driveFixture(
+  fixture: { streaming?: boolean; sseText?: string; body?: unknown; headers: Record<string, string>; status?: number },
+  store: ReceiptStore,
+  kp: ReturnType<typeof generateKeyPair>,
+  keyDir: string,
+) {
+  const { fetch: traceFetch } = makeTraceFetch(fixture);
+  const wrappedFetch = createReceiptFetch(
+    anthropicProvider,
+    { store, signer: keyPairToSigner(kp), actor: { type: "service", id: "app" } },
+    traceFetch,
+  );
+  const reqBody = fixture.streaming
+    ? { model: "claude-3-5-sonnet-20241022", messages: [], stream: true }
+    : { model: "claude-3-5-sonnet-20241022", messages: [] };
+  await wrappedFetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    body: JSON.stringify(reqBody),
+  });
+  await store.close();
+  const root = await loadTrustRoot(keyDir);
+  const report = await verifyChain(store.path, resolverFromTrustRoot(root));
+  return report.receipts[0]!;
+}
+
+describe("anthropic gateway fidelity — request_id via override (G1.2)", () => {
+  it("request_id captured from an alternate header via override", async () => {
+    const setup = await freshStore();
+    const { fetch: traceFetch } = makeTraceFetch({
+      streaming: true,
+      sseText: anthropicNoUsageStreaming.sseText,
+      headers: { "content-type": "text/event-stream", "x-bedrock-request-id": "bedrock-req-42" },
+    });
+    const wrappedFetch = createReceiptFetch(
+      anthropicProvider,
+      {
+        store: setup.store,
+        signer: keyPairToSigner(setup.kp),
+        actor: { type: "service", id: "app" },
+        provider: { requestIdHeaders: ["x-bedrock-request-id", ...anthropicProvider.requestIdHeaders] },
+      },
+      traceFetch,
+    );
+    await wrappedFetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      body: JSON.stringify({ model: "claude-3-5-sonnet-20241022", messages: [], stream: true }),
+    });
+    await setup.store.close();
+    const root = await loadTrustRoot(setup.keyDir);
+    const report = await verifyChain(setup.store.path, resolverFromTrustRoot(root));
+    // FAILS today: no provider override seam. Phase 2 adds it.
+    expect(report.receipts[0]!.body.request_id).toBe("bedrock-req-42");
+  });
+});
+
+describe("anthropic gateway fidelity — assembler completeness (G2.2)", () => {
+  it("assembles thinking + text + tool_use blocks in order from deltas", async () => {
+    const setup = await freshStore();
+    const r = await driveFixture(anthropicThinkingToolStreaming, setup.store, setup.kp, setup.keyDir);
+    const content = r.body.content?.response as { content: Array<Record<string, unknown>> };
+    const blocks = content.content;
+    // FAILS today: only text_delta is read; thinking/input_json_delta are dropped.
+    expect(blocks.map((b) => b.type)).toEqual(anthropicThinkingToolStreaming.expect.blockTypes);
+    const thinking = blocks.find((b) => b.type === "thinking") as Record<string, unknown> | undefined;
+    expect(thinking?.thinking).toBe(anthropicThinkingToolStreaming.expect.thinkingText);
+    const text = blocks.find((b) => b.type === "text") as Record<string, unknown> | undefined;
+    expect(text?.text).toBe(anthropicThinkingToolStreaming.expect.textText);
+    const toolUse = blocks.find((b) => b.type === "tool_use") as Record<string, unknown> | undefined;
+    expect(toolUse?.id).toBe(anthropicThinkingToolStreaming.expect.toolUse.id);
+    expect(toolUse?.name).toBe(anthropicThinkingToolStreaming.expect.toolUse.name);
+    expect(toolUse?.input).toEqual(anthropicThinkingToolStreaming.expect.toolUse.input);
+  });
+});
+
+describe("anthropic gateway fidelity — honest usage absence (G3.1)", () => {
+  it("usage is undefined when no usage events are sent (not fabricated 0/0)", async () => {
+    const setup = await freshStore();
+    const r = await driveFixture(anthropicNoUsageStreaming, setup.store, setup.kp, setup.keyDir);
+    // FAILS today: Anthropic fabricates usage:{input_tokens:0,output_tokens:0}. Phase 4 fixes it.
+    expect(r.body.usage).toBeUndefined();
+  });
+});
+
+describe("anthropic gateway fidelity — fidelity property (G6.3)", () => {
+  // Every distinct delta `type` in the fixture's content_block_delta events MUST be represented
+  // in the assembled body. Allowlist is empty after Phase 3. During Phase 1 (red) this fails for
+  // any fixture whose deltas include a type the assembler drops today (thinking/input_json).
+  const KNOWN_DROPPED: ReadonlySet<string> = new Set<string>([]);
+
+  it.each(anthropicStreamingFixtures.map((f) => [f.name, f] as const))(
+    "every delta type in %s is represented in the assembled body",
+    async (_name, fixture) => {
+      const setup = await freshStore();
+      const r = await driveFixture(fixture, setup.store, setup.kp, setup.keyDir);
+      const assembled = r.body.content?.response as Record<string, unknown> | undefined;
+      const assembledStr = JSON.stringify(assembled ?? {});
+      const deltaTypes = collectDeltaTypes(fixture.sseText!);
+      const unrepresented: string[] = [];
+      for (const dt of deltaTypes) {
+        if (KNOWN_DROPPED.has(dt)) continue;
+        if (!isDeltaTypeRepresented(dt, assembledStr)) unrepresented.push(dt);
+      }
+      expect(unrepresented).toEqual([]);
+    },
+  );
+});
+
+/** Collect every distinct `delta.type` across the fixture's content_block_delta events. */
+function collectDeltaTypes(sseText: string): string[] {
+  const types = new Set<string>();
+  for (const line of sseText.split("\n")) {
+    const trimmed = line.trimStart();
+    if (!trimmed.startsWith("data:")) continue;
+    const payload = trimmed.slice(5).trim();
+    if (!payload || payload === "[DONE]") continue;
+    try {
+      const obj = JSON.parse(payload) as Record<string, unknown>;
+      if (obj.type === "content_block_delta") {
+        const delta = obj.delta as Record<string, unknown> | undefined;
+        if (delta && typeof delta.type === "string") types.add(delta.type);
+      }
+    } catch {
+      // skip unparseable
+    }
+  }
+  return [...types];
+}
+
+/** Is a given Anthropic delta type represented in the assembled body? */
+function isDeltaTypeRepresented(deltaType: string, assembledStr: string): boolean {
+  switch (deltaType) {
+    case "text_delta":
+      // text block always present in the assembled content array.
+      return assembledStr.includes('"type":"text"');
+    case "thinking_delta":
+      return assembledStr.includes('"type":"thinking"');
+    case "input_json_delta":
+      // represented as a tool_use block with parsed input.
+      return assembledStr.includes('"type":"tool_use"');
+    default:
+      return assembledStr.includes(deltaType);
+  }
+}
