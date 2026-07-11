@@ -1,6 +1,6 @@
 {
   "name": "@receipta/openai",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "receipta integration for the OpenAI SDK — emits signed, hash-chained receipts for every chat completion.",
   "license": "Apache-2.0",
   "type": "module",

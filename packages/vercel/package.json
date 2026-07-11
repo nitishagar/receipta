@@ -1,6 +1,6 @@
 {
   "name": "@receipta/vercel",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "receipta integration for the Vercel AI SDK — emits signed, hash-chained receipts via the Telemetry integration.",
   "license": "Apache-2.0",
   "type": "module",

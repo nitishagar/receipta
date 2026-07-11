@@ -1,6 +1,6 @@
 {
   "name": "@receipta/core",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Tamper-evident receipt core: RFC 8785 canonicalization, Ed25519 signing, hash-chained store, offline verify. Zero runtime dependencies.",
   "license": "Apache-2.0",
   "type": "module",
