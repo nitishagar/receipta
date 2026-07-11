@@ -141,10 +141,17 @@ export const anthropicProvider: ProviderAdapter = {
       model: model ?? "unknown",
       content,
       stop_reason: stopReason ?? "end_turn",
-      usage: {
-        input_tokens: inputTokens ?? 0,
-        output_tokens: outputTokens ?? 0,
-      },
+      // G3.1: build usage ONLY when at least one side was seen; each side reported independently
+      // (never fabricated to 0). When no usage event was sent, omit usage entirely so
+      // extractUsage returns undefined (honest absence) instead of {0,0}.
+      ...(inputTokens !== undefined || outputTokens !== undefined
+        ? {
+            usage: {
+              ...(inputTokens !== undefined ? { input_tokens: inputTokens } : {}),
+              ...(outputTokens !== undefined ? { output_tokens: outputTokens } : {}),
+            },
+          }
+        : {}),
     } as unknown as JsonValue;
   },
 };

@@ -617,6 +617,31 @@ describe("gateway fidelity — body-aware outcome (G4)", () => {
     );
     expect(r.body.outcome).toBe("success");
   });
+
+  it("a 2xx response with a malformed/non-JSON body keeps status-based outcome (G4.2)", async () => {
+    const setup = await freshStore();
+    // A non-JSON 2xx body (e.g. an HTML page or truncated text) cannot be parsed, so it cannot be
+    // inspected for a top-level error — it MUST default to the status-code outcome (no spurious
+    // "error"). Use a raw fetch so the body is genuinely unparseable (not JSON.stringify'd).
+    const rawFetch: FetchLike = async () =>
+      new Response("<html>not json</html>", {
+        status: 200,
+        headers: { "content-type": "text/html", "x-request-id": "malformed-1" },
+      });
+    const wrappedFetch = createReceiptFetch(
+      openaiProvider,
+      { store: setup.store, signer: keyPairToSigner(setup.kp), actor: { type: "service", id: "app" } },
+      rawFetch,
+    );
+    await wrappedFetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      body: JSON.stringify({ model: "gpt-4o", messages: [] }),
+    });
+    await setup.store.close();
+    const root = await loadTrustRoot(setup.keyDir);
+    const report = await verifyChain(setup.store.path, resolverFromTrustRoot(root));
+    expect(report.receipts[0]!.body.outcome).toBe("success");
+  });
 });
 
 describe("gateway fidelity — fidelity property (G6.3)", () => {

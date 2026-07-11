@@ -231,6 +231,14 @@ async function safeEmit(
   // Privacy commitments (HMAC, D10) over request/response content.
   const commitments = computeCommitments(commitmentKey, info.requestBody, info.responseBody, info.responseText);
 
+  // G4.1: a 2xx response carrying a top-level JSON `error` object is a gateway soft-failure —
+  // record outcome "error". Layered here (not in outcomeFromStatus) so the ProviderAdapter
+  // interface stays status-only and every user-built adapter is unaffected (smaller blast radius).
+  // G4.2: non-error 2xx bodies and malformed/non-JSON bodies keep the status-based outcome —
+  // bodyHasError returns false for non-objects/undefined, so no spurious "error".
+  const outcome =
+    info.outcome === "success" && bodyHasError(info.responseBody) ? "error" : info.outcome;
+
   const completionTime = new Date();
   const body: Omit<
     ReceiptBody,
@@ -245,7 +253,7 @@ async function safeEmit(
     model,
     request_id: info.requestId,
     attempt_index: info.attemptIndex,
-    outcome: info.outcome,
+    outcome,
     content_captured: captured,
     capture_mode: info.captureMode,
     content,
@@ -317,6 +325,18 @@ function readRequestId(response: Response, headers: string[]): string | undefine
     if (v) return v;
   }
   return undefined;
+}
+
+/**
+ * G4.1: does the response body signal a soft-failure? True iff the body is a JSON OBJECT (not an
+ * array) carrying a truthy top-level `error` field — the shape several OpenAI-compatible gateways
+ * use to soft-fail on a 2xx. NOT recursive (only top-level). Returns false for non-objects,
+ * arrays, undefined, and bodies without a top-level error (G4.2: no spurious "error").
+ */
+function bodyHasError(responseBody: JsonValue | undefined): boolean {
+  if (!responseBody || typeof responseBody !== "object" || Array.isArray(responseBody)) return false;
+  const err = (responseBody as Record<string, JsonValue>).error;
+  return err !== undefined && err !== null;
 }
 
 /**
