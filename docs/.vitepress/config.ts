@@ -7,6 +7,16 @@ export default defineConfig({
   base: "/receipta/",
   cleanUrl: true,
   lastUpdated: true,
+  head: [
+    // Honor both palettes; the restyle targets light + dark (BA-4).
+    ["meta", { name: "color-scheme", content: "light dark" }],
+    // Favicon: relative path under docs/public/ — VitePress serves public/ assets
+    // rebased under base "/receipta/" (INV-1). Monochrome SVG, <1KB (BA-7).
+    ["link", { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" }],
+    // theme-color per palette (UA tab/scrollbar tint). light = warm bg, dark = near-black.
+    ["meta", { name: "theme-color", content: "#fcfafa" }],
+    ["meta", { name: "theme-color", content: "#121212", media: "(prefers-color-scheme: dark)" }],
+  ],
   themeConfig: {
     nav: [
       { text: "Guide", link: "/guide/quickstart" },

@@ -9,10 +9,22 @@
  * No gradients, no backdrop-filter, no background-clip:text anywhere (INV-12) —
  * parity.test.ts asserts this file + variables.css stay clean of them.
  *
- * NOTE: @fontsource font @imports are added at the very top of this file in
- * Phase 3 (they must precede usage). Until then system fonts fall back through
- * the --receipta-font-* stacks.
+ * Font imports MUST precede any usage; they are first in this file. Vite resolves
+ * the @fontsource bare specifiers (unlike PostCSS @import of our own CSS, which
+ * uses a relative path) and rebases the woff2 url(...) under base "/receipta/"
+ * automatically (INV-1; verified by build-smoke.test.ts). Only latin + the 3
+ * weights actually used are imported, keeping the bundle lean (BA-6, ~100-120KB).
  */
+
+/* ---- IBM Plex Mono (display/code surfaces) — weights 400/500/700, latin ---- */
+@import "@fontsource/ibm-plex-mono/latin-400.css";
+@import "@fontsource/ibm-plex-mono/latin-500.css";
+@import "@fontsource/ibm-plex-mono/latin-700.css";
+
+/* ---- IBM Plex Sans (body) — weights 400/500/700, latin ---- */
+@import "@fontsource/ibm-plex-sans/latin-400.css";
+@import "@fontsource/ibm-plex-sans/latin-500.css";
+@import "@fontsource/ibm-plex-sans/latin-700.css";
 
 /* ---------------------------------------------------------------------------
  * Display surfaces use IBM Plex Mono (BA-5): headings, nav title, code, hero.
