@@ -1,0 +1,145 @@
+/**
+ * receipta theme — bind VitePress CSS vars to opencode-derived tokens.
+ *
+ * Imports the @receipta/design-tokens `--receipta-*` custom properties (the tested
+ * source of truth), then aliases them onto VitePress's exposed --vp-* hooks. Every
+ * hook bound here was verified to exist in
+ * node_modules/vitepress/dist/client/theme-default/styles/vars.css.
+ *
+ * Light values apply under :root; the same hooks are re-bound under .dark with the
+ * dark token set (BA-4: keep the toggle, restyle both palettes).
+ *
+ * NOTE: PostCSS @import does not resolve bare package specifiers (@receipta/...),
+ * so we use a relative path to the package source — the SAME file parity.test.ts
+ * guards, preserving INV-10 (single source of truth, zero drift).
+ */
+
+@import "../../../packages/design-tokens/src/variables.css";
+
+/* ----------------------------------------------------------------------------
+ * Brand — opencode is monochrome; "brand" becomes the strong text/ink color, not
+ * indigo. The pale-yellow interactive token is reserved for focus/selection only.
+ * -------------------------------------------------------------------------- */
+:root {
+  --vp-c-brand-1: var(--receipta-c-text-strong);
+  --vp-c-brand-2: var(--receipta-c-text-strong);
+  --vp-c-brand-3: var(--receipta-c-text-muted);
+  --vp-c-brand-soft: var(--receipta-c-bg-weak);
+  --vp-c-brand: var(--vp-c-brand-1);
+}
+
+/* ----------------------------------------------------------------------------
+ * Backgrounds — opencode warm off-white (light) / near-black (dark).
+ * -------------------------------------------------------------------------- */
+:root {
+  --vp-c-bg: var(--receipta-c-bg);
+  --vp-c-bg-alt: var(--receipta-c-bg-weak);
+  --vp-c-bg-elv: var(--receipta-c-bg);
+  --vp-c-bg-soft: var(--receipta-c-bg-weak);
+}
+
+/* ----------------------------------------------------------------------------
+ * Text — strong/muted/subtle map 1:1 onto VitePress's text-1/2/3 scale.
+ * -------------------------------------------------------------------------- */
+:root {
+  --vp-c-text-1: var(--receipta-c-text-strong);
+  --vp-c-text-2: var(--receipta-c-text-muted);
+  --vp-c-text-3: var(--receipta-c-text-subtle);
+}
+
+/* ----------------------------------------------------------------------------
+ * Borders / dividers — 1px hairline system. VitePress's border/divider/gutter
+ * all derive from the same hairline token.
+ * -------------------------------------------------------------------------- */
+:root {
+  --vp-c-border: var(--receipta-c-border);
+  --vp-c-divider: var(--receipta-c-border-weak);
+  --vp-c-gutter: var(--receipta-c-border);
+}
+
+/* ----------------------------------------------------------------------------
+ * Fonts — IBM Plex Mono for display/code (BA-5), IBM Plex Sans for body.
+ * -------------------------------------------------------------------------- */
+:root {
+  --vp-font-family-base: var(--receipta-font-sans);
+  --vp-font-family-mono: var(--receipta-font-mono);
+}
+
+/* ----------------------------------------------------------------------------
+ * Hero — FLAT. opencode has no gradients/glow (INV-12). Name color = strong ink;
+ * do NOT set --vp-home-hero-name-background to a gradient (it stays transparent).
+ * -------------------------------------------------------------------------- */
+:root {
+  --vp-home-hero-name-color: var(--receipta-c-text-strong);
+  --vp-home-hero-name-background: transparent;
+  --vp-home-hero-image-background-image: none;
+  --vp-home-hero-image-filter: none;
+}
+
+/* ----------------------------------------------------------------------------
+ * Custom containers — ::: tip / info(note) / warning / danger must read in the
+ * monochrome system (INV-10). danger keeps a perceptible but desaturated red so a
+ * neutral danger box isn't a usability regression; the rest are monochrome.
+ * tip = brand, info(note) = muted ink, warning = a desaturated amber outline.
+ * -------------------------------------------------------------------------- */
+:root {
+  --vp-c-tip-1: var(--receipta-c-text-strong);
+  --vp-c-tip-2: var(--receipta-c-text-muted);
+  --vp-c-tip-soft: var(--receipta-c-bg-weak);
+  --vp-c-note-1: var(--receipta-c-text-muted);
+  --vp-c-note-2: var(--receipta-c-text-subtle);
+  --vp-c-note-soft: var(--receipta-c-bg-weak);
+  --vp-c-warning-1: hsl(38, 45%, 38%);
+  --vp-c-warning-2: hsl(38, 35%, 45%);
+  --vp-c-warning-soft: hsla(38, 45%, 38%, 0.12);
+  --vp-c-danger-1: hsl(4, 55%, 45%);
+  --vp-c-danger-2: hsl(4, 45%, 52%);
+  --vp-c-danger-soft: hsla(4, 55%, 45%, 0.12);
+}
+
+/* ============================================================================
+ * DARK — re-bind the same hooks under .dark (BA-4). The design-tokens dark
+ * palette is already scoped to .dark via its own variables.css; here we only
+ * point VitePress's hooks at the (now-dark) --receipta-* values.
+ * ======================================================================== */
+.dark {
+  --vp-c-brand-1: var(--receipta-c-text-strong);
+  --vp-c-brand-2: var(--receipta-c-text-strong);
+  --vp-c-brand-3: var(--receipta-c-text-muted);
+  --vp-c-brand-soft: var(--receipta-c-bg-weak);
+  --vp-c-brand: var(--vp-c-brand-1);
+
+  --vp-c-bg: var(--receipta-c-bg);
+  --vp-c-bg-alt: var(--receipta-c-bg-weak);
+  --vp-c-bg-elv: var(--receipta-c-bg);
+  --vp-c-bg-soft: var(--receipta-c-bg-weak);
+
+  --vp-c-text-1: var(--receipta-c-text-strong);
+  --vp-c-text-2: var(--receipta-c-text-muted);
+  --vp-c-text-3: var(--receipta-c-text-subtle);
+
+  --vp-c-border: var(--receipta-c-border);
+  --vp-c-divider: var(--receipta-c-border-weak);
+  --vp-c-gutter: var(--receipta-c-border);
+
+  --vp-font-family-base: var(--receipta-font-sans);
+  --vp-font-family-mono: var(--receipta-font-mono);
+
+  --vp-home-hero-name-color: var(--receipta-c-text-strong);
+  --vp-home-hero-name-background: transparent;
+  --vp-home-hero-image-background-image: none;
+  --vp-home-hero-image-filter: none;
+
+  --vp-c-tip-1: var(--receipta-c-text-strong);
+  --vp-c-tip-2: var(--receipta-c-text-muted);
+  --vp-c-tip-soft: var(--receipta-c-bg-weak);
+  --vp-c-note-1: var(--receipta-c-text-muted);
+  --vp-c-note-2: var(--receipta-c-text-subtle);
+  --vp-c-note-soft: var(--receipta-c-bg-weak);
+  --vp-c-warning-1: hsl(38, 50%, 60%);
+  --vp-c-warning-2: hsl(38, 40%, 65%);
+  --vp-c-warning-soft: hsla(38, 50%, 60%, 0.14);
+  --vp-c-danger-1: hsl(4, 60%, 62%);
+  --vp-c-danger-2: hsl(4, 50%, 68%);
+  --vp-c-danger-soft: hsla(4, 60%, 62%, 0.14);
+}

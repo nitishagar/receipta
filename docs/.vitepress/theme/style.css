@@ -1,0 +1,137 @@
+/**
+ * receipta theme — structural CSS overrides.
+ *
+ * variables.css handles the color/font *values*; this file handles *structure*:
+ * hairline 1px borders on cards/dividers/table cells, small crisp radii on
+ * buttons/cards, flat (non-gradient) code-block chrome, mono on display surfaces,
+ * and recolored (not removed) focus rings (INV-11).
+ *
+ * No gradients, no backdrop-filter, no background-clip:text anywhere (INV-12) —
+ * parity.test.ts asserts this file + variables.css stay clean of them.
+ *
+ * NOTE: @fontsource font @imports are added at the very top of this file in
+ * Phase 3 (they must precede usage). Until then system fonts fall back through
+ * the --receipta-font-* stacks.
+ */
+
+/* ---------------------------------------------------------------------------
+ * Display surfaces use IBM Plex Mono (BA-5): headings, nav title, code, hero.
+ * Body stays IBM Plex Sans for long-form readability.
+ * ------------------------------------------------------------------------- */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.VPNavBarTitle .title,
+.VPHomeHero .name,
+.VPHomeHero .text,
+.vp-doc :not(pre) > code,
+.vp-doc code {
+  font-family: var(--receipta-font-mono);
+}
+
+/* ---------------------------------------------------------------------------
+ * Radii — opencode's crisp set. Buttons/inputs/cards take the small radii.
+ * ------------------------------------------------------------------------- */
+.vp-doc a.button,
+.VPButton,
+.VPNavBarSearch,
+.vp-doc button {
+  border-radius: var(--receipta-radius-sm);
+}
+
+.VPBox,
+.vp-doc .vp-doc-box,
+.custom-block,
+.VPFeature {
+  border-radius: var(--receipta-radius-md);
+}
+
+/* ---------------------------------------------------------------------------
+ * Hairline borders — cards, dividers, and table cells follow the 1px system.
+ * ------------------------------------------------------------------------- */
+.VPFeature {
+  border: var(--receipta-border-width) solid var(--receipta-c-border);
+  background-color: var(--receipta-c-bg);
+}
+
+.vp-doc table {
+  display: block;
+  border-collapse: collapse;
+  overflow-x: auto;
+}
+
+.vp-doc th,
+.vp-doc td {
+  border: var(--receipta-border-width) solid var(--receipta-c-border);
+  padding: 0.5rem 0.75rem;
+}
+
+.vp-doc tr {
+  border-top: var(--receipta-border-width) solid var(--receipta-c-border);
+  background-color: var(--receipta-c-bg);
+}
+
+/* ---------------------------------------------------------------------------
+ * Custom containers — monochrome chrome. The custom-block border + background
+ * follow the hairline system; the left accent strip uses the container's
+ * recolored --vp-c-*-1 token (set in variables.css), danger stays readable.
+ * ------------------------------------------------------------------------- */
+.custom-block {
+  border: var(--receipta-border-width) solid var(--receipta-c-border);
+  border-radius: var(--receipta-radius-md);
+  background-color: var(--receipta-c-bg-weak);
+}
+
+/* ---------------------------------------------------------------------------
+ * Code blocks — flat chrome. shiki token colors come from VitePress's theme
+ * (we leave the syntax palette alone); the surrounding chrome — background,
+ * border, copy button, lang label — reads monochrome, not indigo.
+ * ------------------------------------------------------------------------- */
+.vp-doc div[class*="language-"],
+.vp-block {
+  border: var(--receipta-border-width) solid var(--receipta-c-border);
+  border-radius: var(--receipta-radius-md);
+  background-color: var(--receipta-c-bg-soft);
+}
+
+.vp-doc div[class*="language-"] button.copy {
+  border-color: var(--receipta-c-border);
+  background-color: var(--receipta-c-bg-weak);
+}
+
+.vp-doc div[class*="language-"] .lang {
+  color: var(--receipta-c-text-subtle);
+}
+
+/* ---------------------------------------------------------------------------
+ * Focus ring — recolored to the pale-yellow interactive token, NOT removed
+ * (INV-11). Keep the default outline width/offset; only swap the color.
+ * ------------------------------------------------------------------------- */
+:focus-visible {
+  outline-color: var(--receipta-c-bg-interactive);
+}
+
+::selection {
+  background-color: var(--receipta-c-bg-interactive);
+}
+
+/* ---------------------------------------------------------------------------
+ * Buttons / CTAs — opencode's primary CTA is a strong-ink fill with inverted
+ * text; secondary is hairline-outlined. No shadow, no gradient.
+ * ------------------------------------------------------------------------- */
+.VPButton.brand {
+  border: var(--receipta-border-width) solid var(--receipta-c-text-strong);
+  background-color: var(--receipta-c-bg-strong);
+  color: var(--receipta-c-text-inverted);
+  border-radius: var(--receipta-radius-sm);
+}
+
+.VPButton.alt {
+  border: var(--receipta-border-width) solid var(--receipta-c-border);
+  background-color: transparent;
+  color: var(--receipta-c-text-strong);
+  border-radius: var(--receipta-radius-sm);
+}

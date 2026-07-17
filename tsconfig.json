@@ -6,6 +6,7 @@
     { "path": "packages/anthropic" },
     { "path": "packages/vercel" },
     { "path": "packages/cli" },
-    { "path": "packages/design-tokens" }
+    { "path": "packages/design-tokens" },
+    { "path": "docs/.vitepress" }
   ]
 }

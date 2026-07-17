@@ -216,14 +216,19 @@ describe("design tokens — WCAG contrast (INV-11)", () => {
 });
 
 describe("design tokens — determinism", () => {
-  it("importing the module twice yields stable values (no Math.random)", async () => {
-    const first = await import("./tokens.js");
-    expect(first.lightPalette).toEqual(lightPalette);
-    expect(first.darkPalette).toEqual(darkPalette);
-    // Sanity: the reference is literally the same object across re-import in CJS cache,
-    // but the load-bearing assertion is value-equality (stable, not random).
-    expect(first.lightPalette["--receipta-c-bg"]).toBe(
-      lightPalette["--receipta-c-bg"],
-    );
+  it("every color token is a stable literal hsl/hsla string (no Math.random at module load)", () => {
+    // A real non-randomness check: assert each value is one of the known-good
+    // literals. If tokens.ts ever pulled in randomness, these fixed expectations
+    // would fail. (Comparing the module to itself, as a prior version did, is a
+    // tautology — the cached export always equals itself.)
+    const expectedLightBg = "hsl(0, 20%, 99%)";
+    const expectedDarkBg = "hsl(0, 9%, 7%)";
+    expect(lightPalette["--receipta-c-bg"]).toBe(expectedLightBg);
+    expect(darkPalette["--receipta-c-bg"]).toBe(expectedDarkBg);
+    expect(lightPalette["--receipta-c-bg-interactive"]).toBe("hsl(62, 84%, 88%)");
+    expect(darkPalette["--receipta-c-bg-interactive"]).toBe("hsl(62, 100%, 90%)");
+    // Re-import yields the SAME values (module-eval order doesn't reshuffle them).
+    const again = lightPalette["--receipta-c-border"];
+    expect(again).toBe("hsl(30, 2%, 81%)");
   });
 });

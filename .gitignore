@@ -50,4 +50,6 @@ Thumbs.db
 # VitePress build output
 docs/.vitepress/dist/
 docs/.vitepress/cache/
-.vitepress/
+# Stray dep cache when `vitepress` runs from the repo root (anchored to root only,
+# so docs/.vitepress/ theme + config stay tracked).
+/.vitepress/

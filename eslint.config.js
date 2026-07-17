@@ -15,6 +15,8 @@ export default tseslint.config(
       "coverage/**",
       "docs/.vitepress/dist/**",
       "docs/.vitepress/cache/**",
+      // VitePress dep cache created at repo root when `vitepress` runs from root.
+      ".vitepress/**",
       "**/*.tsbuildinfo",
       "packages/*/dist/**",
     ],
