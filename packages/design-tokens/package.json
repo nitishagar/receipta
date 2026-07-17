@@ -1,0 +1,27 @@
+{
+  "name": "@receipta/design-tokens",
+  "private": true,
+  "version": "0.0.0",
+  "description": "opencode-derived monochrome design tokens for the receipta docs theme. Tested source of truth for palette, typography, radii, and borders.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "files": ["src"],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nitishagar/receipta.git",
+    "directory": "packages/design-tokens"
+  },
+  "homepage": "https://nitishagar.github.io/receipta/",
+  "bugs": {
+    "url": "https://github.com/nitishagar/receipta/issues"
+  }
+}

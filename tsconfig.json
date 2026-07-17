@@ -5,6 +5,7 @@
     { "path": "packages/openai" },
     { "path": "packages/anthropic" },
     { "path": "packages/vercel" },
-    { "path": "packages/cli" }
+    { "path": "packages/cli" },
+    { "path": "packages/design-tokens" }
   ]
 }

@@ -53,6 +53,8 @@ importers:
 
   packages/core: {}
 
+  packages/design-tokens: {}
+
   packages/openai:
     dependencies:
       '@receipta/core':
