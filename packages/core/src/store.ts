@@ -402,9 +402,12 @@ async function acquireLock(lockPath: string): Promise<void> {
       throw new Error(
         `receipta store is locked by another writer: ${lockPath} exists.\n` +
           `v0.1 is single-writer per store. If no other process is running, remove the lockfile manually.`,
+        { cause: e },
       );
     }
-    throw new Error(`acquireLock: could not create lockfile ${lockPath}: ${code ?? e}`);
+    throw new Error(`acquireLock: could not create lockfile ${lockPath}: ${code ?? e}`, {
+      cause: e,
+    });
   }
   if (fh) await fh.close();
 }
