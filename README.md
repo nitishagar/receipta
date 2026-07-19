@@ -15,20 +15,21 @@ trusting the operator, the dashboard, or the network.
 
 ## Status
 
-**v0.1 (MVP).** Single-process local store, Ed25519 signatures, full-chain offline verification,
-JSON-native receipts (RFC 8785 canonical), DSSE/in-toto export. See the
+**v0.1 (MVP), packages published at v0.2.0.** Single-process local store, Ed25519 signatures,
+full-chain offline verification, JSON-native receipts (RFC 8785 canonical), DSSE/in-toto export,
+and a CLI for `key gen` / `verify` / `export`. See the
 [threat model](https://nitishagar.github.io/receipta/guide/threat-model) for what v0.1 defends
 against (and honestly does not).
 
 ## Packages
 
-| Package | What |
-| --- | --- |
-| [`@receipta/core`](./packages/core) | Zero-runtime-dep foundation: schema, canonicalization, crypto, store, chain, verify |
-| [`@receipta/cli`](./packages/cli) | The `receipta` binary: `verify`, `export`, `key gen` |
-| [`@receipta/openai`](./packages/openai) | `fetch` wrapper for the `openai` SDK |
-| [`@receipta/anthropic`](./packages/anthropic) | `fetch` wrapper for the `@anthropic-ai/sdk` |
-| [`@receipta/vercel`](./packages/vercel) | `Telemetry` integration for the `ai` SDK |
+| Package                                       | What                                                                                |
+| --------------------------------------------- | ----------------------------------------------------------------------------------- |
+| [`@receipta/core`](./packages/core)           | Zero-runtime-dep foundation: schema, canonicalization, crypto, store, chain, verify |
+| [`@receipta/cli`](./packages/cli)             | The `receipta` binary: `verify`, `export`, `key gen`                                |
+| [`@receipta/openai`](./packages/openai)       | `fetch` wrapper for the `openai` SDK                                                |
+| [`@receipta/anthropic`](./packages/anthropic) | `fetch` wrapper for the `@anthropic-ai/sdk`                                         |
+| [`@receipta/vercel`](./packages/vercel)       | `Telemetry` integration for the `ai` SDK                                            |
 
 ## Quick start
 
@@ -36,6 +37,7 @@ against (and honestly does not).
 pnpm install
 pnpm test          # unit + integration
 pnpm verify:demo   # build a store, verify it, tamper, re-verify → watch it fail
+pnpm example       # end-to-end quickstart (no network/API key): key gen → call → verify → DSSE export
 ```
 
 ## License

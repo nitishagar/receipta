@@ -13,30 +13,62 @@ The v7 `Telemetry` integration's `onLanguageModelCallEnd` callback fires with th
 ## Usage (v7)
 
 ```ts
-import { registerTelemetry } from "ai";
-import { receiptaTelemetry } from "@receipta/vercel";
-import { openStore, generateKeyPair } from "@receipta/core";
+import { registerTelemetry } from 'ai';
+import { receiptaTelemetry } from '@receipta/vercel';
+import { openStore, generateKeyPair } from '@receipta/core';
 
-const store = await openStore("./receipts.log.receipta");
+const store = await openStore('./receipts.log.receipta');
 const signer = generateKeyPair();
 
-registerTelemetry(receiptaTelemetry({
+const telemetry = receiptaTelemetry({
   store,
   signer,
-  actor: { type: "agent", id: "my-agent" },
-  captureMode: "full",
-}));
+  actor: { type: 'agent', id: 'my-agent' },
+  captureMode: 'full',
+});
+registerTelemetry(telemetry);
 
-// every generateText/streamText now emits a receipt via the callback
+// every generateText/streamText now emits a receipt via the callback.
+await telemetry.flush(); // before close — see "Draining pending receipts" below.
+await store.close();
 ```
+
+## Draining pending receipts (`flush()`)
+
+The SDK's telemetry callback contract is `(event) => void` — it does **not** await receipta's work.
+So receipt emission is launched but not awaited: the `generateText`/`streamText` promise can resolve
+before the receipt has landed durably in the store. Closing the store immediately after a generation
+can therefore lose the final receipt(s).
+
+`receiptaTelemetry()` returns an object with a `flush()` method that awaits the tail of the in-flight
+emission chain. **Call it before `store.close()`** (or at the end of a request) to guarantee every
+pending receipt has been appended:
+
+```ts
+await telemetry.flush();
+await store.close();
+```
+
+`flush()` drains the snapshot of emissions pending **at call time**. Emissions that race in after
+`flush()` returns are caller misuse — call `flush()` once your generation has fully completed and no
+further emissions are expected.
+
+## Emission errors never throw into your call
+
+Receipt emission is wrapped so it never throws into your `generateText`/`streamText`: the callback
+runs inside the SDK's own dispatch, and an uncaught throw there would surface to your call (violating
+non-interference). A synchronous throw during receipt build (before a promise exists) is converted to
+a rejection and logged to stderr by default (override with the `logError` config option); async
+failures are likewise caught and logged. Failed emissions are skipped, not retried — inspect stderr
+(`[receipta]` prefix) if receipts appear missing.
 
 ## v6
 
 For AI SDK v6, use the shim:
 
 ```ts
-import { registerTelemetryIntegration } from "ai";
-import { receiptaTelemetryV6 } from "@receipta/vercel";
+import { registerTelemetryIntegration } from 'ai';
+import { receiptaTelemetryV6 } from '@receipta/vercel';
 
 registerTelemetryIntegration(receiptaTelemetryV6({ store, signer, actor }));
 ```

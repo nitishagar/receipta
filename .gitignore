@@ -24,6 +24,8 @@ pnpm-debug.log*
 .store/
 receipta-store/
 .demo-store/
+# Example working files (regenerated each run)
+examples/**/.work/
 
 # Trusted key material (private keys never committed)
 keys/*.key
@@ -46,6 +48,9 @@ Thumbs.db
 # AI tooling local config (kept out of the public repo)
 .claude/
 .zcode/
+
+# Internal notes / planning docs (never published; kept local)
+thoughts/
 
 # VitePress build output
 docs/.vitepress/dist/
