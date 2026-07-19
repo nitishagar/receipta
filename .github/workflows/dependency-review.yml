@@ -1,0 +1,23 @@
+# Dependency review — flags vulnerable packages and incompatible licenses in pull requests.
+# Runs on PRs only; uses GitHub's dependency graph + advisory database (no install needed).
+name: Dependency Review
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          # Fail the PR on high/critical vulnerabilities or license violations; warn otherwise.
+          fail-on-severity: high

@@ -1,12 +1,24 @@
 # Publish packages to npm with provenance attestations on version tags.
-# Uses npm native --provenance (SLSA-conformant via Sigstore) and trusted publishing (OIDC).
-# Fallback: per-package npm publish --provenance if pnpm -r publish errors (verified necessary).
+#
+# Publishing model: this workflow authenticates to npm with a long-lived NPM_TOKEN secret (the
+# `NODE_AUTH_TOKEN` env below). npm `--provenance` is enabled, which attaches a Sigstore/SLSA
+# attestation derived from the GitHub Actions OIDC token (the `id-token: write` permission).
+#
+# NOTE on trusted publishing: npm's full "trusted publishing" flow (where npm exchanges the OIDC
+# token for a short-lived publish token, removing the need for NPM_TOKEN entirely) is NOT yet
+# configured for the @receipta scope — it requires per-package setup in the npm UI. Until that
+# setup is done, this workflow relies on NPM_TOKEN. See CONTRIBUTING.md "Releasing" for the manual
+# npm-UI steps to migrate to trusted publishing.
+#
+# Fallback: per-package `npm publish --provenance` runs if `pnpm -r publish` errors (verified
+# necessary — pnpm's aggregated publish sometimes surfaces a provenance error that the per-package
+# path does not).
 name: Publish
 
 on:
   push:
     tags:
-      - "v*"
+      - 'v*'
 
 permissions:
   contents: read
@@ -27,7 +39,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: "22"
+          node-version: '22'
           cache: pnpm
           registry-url: https://registry.npmjs.org
 

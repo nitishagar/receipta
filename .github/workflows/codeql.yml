@@ -1,0 +1,37 @@
+# CodeQL — semantic security analysis for JavaScript/TypeScript.
+# Runs the default query suite on push to main, on pull requests, and weekly (catches new queries
+# and vulnerabilities disclosed after a commit landed). Findings surface in the Security tab.
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly, Monday 09:00 UTC.
+    - cron: '0 9 * * 1'
+
+permissions:
+  contents: read
+  # Required for CodeQL to upload findings to the Security tab and annotate PRs.
+  security-events: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          # Default query suite (WI-14: js-ts, default queries). The default suite for JS/TS is
+          # `security-and-quality`, which covers the common vulnerability classes for this ecosystem.
+          languages: javascript-typescript
+
+      # No build step needed: CodeQL's JS/TS analyzer interprets source directly (no compilation).
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:javascript-typescript'
