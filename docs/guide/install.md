@@ -31,12 +31,12 @@ pnpm add @receipta/core @receipta/openai
 # or: npm install @receipta/core @receipta/openai
 ```
 
-| Package | Purpose |
-| --- | --- |
-| `@receipta/core` | Schema, canonicalization, crypto, store, verify (zero runtime deps) |
-| `@receipta/openai` | Fetch wrapper for the `openai` SDK |
-| `@receipta/anthropic` | Fetch wrapper for the `@anthropic-ai/sdk` |
-| `@receipta/vercel` | Telemetry integration for the `ai` SDK |
-| `@receipta/cli` | The `receipta` CLI (verify, export, key gen) |
+| Package               | Purpose                                                             |
+| --------------------- | ------------------------------------------------------------------- |
+| `@receipta/core`      | Schema, canonicalization, crypto, store, verify (zero runtime deps) |
+| `@receipta/openai`    | Fetch wrapper for the `openai` SDK                                  |
+| `@receipta/anthropic` | Fetch wrapper for the `@anthropic-ai/sdk`                           |
+| `@receipta/vercel`    | Telemetry integration for the `ai` SDK                              |
+| `@receipta/cli`       | The `receipta` CLI (verify, export, key gen)                        |
 
 The provider SDKs (`openai`, `@anthropic-ai/sdk`, `ai`) are **peer dependencies** — receipta uses your installed version and never forces an upgrade.

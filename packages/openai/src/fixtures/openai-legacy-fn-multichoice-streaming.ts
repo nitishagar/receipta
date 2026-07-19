@@ -14,35 +14,83 @@ function data(payload: Record<string, unknown>): string {
   return `data: ${JSON.stringify(payload)}`;
 }
 
-const id = "chatcmpl-fn-mc-1";
+const id = 'chatcmpl-fn-mc-1';
 const created = 1720000000;
-const model = "gpt-4o";
+const model = 'gpt-4o';
 
 export const openaiLegacyFnMultichoiceStreaming = {
-  name: "openai-legacy-fn-multichoice-streaming",
+  name: 'openai-legacy-fn-multichoice-streaming',
   streaming: true,
   sseText: [
-    data({ id, object: "chat.completion.chunk", created, model, choices: [{ index: 0, delta: { role: "assistant", content: "", function_call: { name: "get_time", arguments: "" } }, finish_reason: null }] }),
-    "",
-    data({ id, object: "chat.completion.chunk", created, model, choices: [{ index: 0, delta: { function_call: { arguments: '{"zone' } }, finish_reason: null }] }),
-    "",
-    data({ id, object: "chat.completion.chunk", created, model, choices: [{ index: 0, delta: { function_call: { arguments: '":"UTC"}' } }, finish_reason: "function_call" }] }),
-    "",
-    data({ id, object: "chat.completion.chunk", created, model, choices: [{ index: 1, delta: { role: "assistant", content: "alt " }, finish_reason: null }] }),
-    "",
-    data({ id, object: "chat.completion.chunk", created, model, choices: [{ index: 1, delta: { content: "choice" }, finish_reason: "stop" }] }),
-    "",
-    "data: [DONE]",
-    "",
-  ].join("\n"),
-  headers: { "content-type": "text/event-stream", "x-request-id": "req-openai-fnmc-006" },
+    data({
+      id,
+      object: 'chat.completion.chunk',
+      created,
+      model,
+      choices: [
+        {
+          index: 0,
+          delta: {
+            role: 'assistant',
+            content: '',
+            function_call: { name: 'get_time', arguments: '' },
+          },
+          finish_reason: null,
+        },
+      ],
+    }),
+    '',
+    data({
+      id,
+      object: 'chat.completion.chunk',
+      created,
+      model,
+      choices: [
+        { index: 0, delta: { function_call: { arguments: '{"zone' } }, finish_reason: null },
+      ],
+    }),
+    '',
+    data({
+      id,
+      object: 'chat.completion.chunk',
+      created,
+      model,
+      choices: [
+        {
+          index: 0,
+          delta: { function_call: { arguments: '":"UTC"}' } },
+          finish_reason: 'function_call',
+        },
+      ],
+    }),
+    '',
+    data({
+      id,
+      object: 'chat.completion.chunk',
+      created,
+      model,
+      choices: [{ index: 1, delta: { role: 'assistant', content: 'alt ' }, finish_reason: null }],
+    }),
+    '',
+    data({
+      id,
+      object: 'chat.completion.chunk',
+      created,
+      model,
+      choices: [{ index: 1, delta: { content: 'choice' }, finish_reason: 'stop' }],
+    }),
+    '',
+    'data: [DONE]',
+    '',
+  ].join('\n'),
+  headers: { 'content-type': 'text/event-stream', 'x-request-id': 'req-openai-fnmc-006' },
   expect: {
-    request_id: "req-openai-fnmc-006",
+    request_id: 'req-openai-fnmc-006',
     /** The legacy function_call assembled from fragmentary deltas (name set once, arguments concatenated). */
-    functionCall: { name: "get_time", arguments: '{"zone":"UTC"}' },
+    functionCall: { name: 'get_time', arguments: '{"zone":"UTC"}' },
     /** ALL choices assembled — two distinct indices, both present. */
     choiceCount: 2,
-    choice1Content: "alt choice",
-    choice1FinishReason: "stop",
+    choice1Content: 'alt choice',
+    choice1FinishReason: 'stop',
   },
 } as const;

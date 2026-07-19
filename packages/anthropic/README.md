@@ -17,24 +17,28 @@ npm install @receipta/anthropic @receipta/core @anthropic-ai/sdk
 ## Usage
 
 ```ts
-import Anthropic from "@anthropic-ai/sdk";
-import { withReceipts } from "@receipta/anthropic";
-import { openStore, generateKeyPair } from "@receipta/core";
+import Anthropic from '@anthropic-ai/sdk';
+import { withReceipts } from '@receipta/anthropic';
+import { openStore, generateKeyPair } from '@receipta/core';
 
-const store = await openStore("./receipts.log.receipta");
+const store = await openStore('./receipts.log.receipta');
 const signer = generateKeyPair(); // in practice, load from env/KMS
 
 // Use the wrapped client exactly as you would `new Anthropic(...)`.
-const client = withReceipts(Anthropic, { apiKey: process.env.ANTHROPIC_API_KEY! }, {
-  store,
-  signer,
-  actor: { type: "service", id: "my-app" },
-});
+const client = withReceipts(
+  Anthropic,
+  { apiKey: process.env.ANTHROPIC_API_KEY! },
+  {
+    store,
+    signer,
+    actor: { type: 'service', id: 'my-app' },
+  },
+);
 
 const res = await client.messages.create({
-  model: "claude-sonnet-5",
+  model: 'claude-sonnet-5',
   max_tokens: 1024,
-  messages: [{ role: "user", content: "Hello" }],
+  messages: [{ role: 'user', content: 'Hello' }],
 });
 ```
 
@@ -75,13 +79,17 @@ Bedrock/Vertex-fronted Claude) uses a nonstandard header, pass the full list via
 override — no fork, no copy of the assembler:
 
 ```ts
-const client = withReceipts(Anthropic, { apiKey }, {
-  store,
-  signer,
-  actor: { type: "service", id: "my-app" },
-  // Override REPLACES the default list — include the headers you want checked, in priority order.
-  provider: { requestIdHeaders: ["x-bedrock-request-id", "request-id"] },
-});
+const client = withReceipts(
+  Anthropic,
+  { apiKey },
+  {
+    store,
+    signer,
+    actor: { type: 'service', id: 'my-app' },
+    // Override REPLACES the default list — include the headers you want checked, in priority order.
+    provider: { requestIdHeaders: ['x-bedrock-request-id', 'request-id'] },
+  },
+);
 ```
 
 ## Docs

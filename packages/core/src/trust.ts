@@ -9,11 +9,11 @@
  * The second-channel fingerprint (in README / docs site) lets a human confirm they have the right
  * key bundle before trusting it. This is the minisign precedent (research [R:102]).
  */
-import { readFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
-import * as path from "node:path";
-import { importPublicKey, sha256, toHex, verify, type KeyObject } from "./crypto.js";
-import type { TrustResolver } from "./chain.js";
+import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import * as path from 'node:path';
+import { importPublicKey, sha256, toHex, verify, type KeyObject } from './crypto.js';
+import type { TrustResolver } from './chain.js';
 
 export interface TrustedKey {
   keyId: string;
@@ -35,14 +35,16 @@ export interface TrustRoot {
  */
 export async function loadTrustRoot(dir: string): Promise<TrustRoot> {
   if (!existsSync(dir)) {
-    throw new Error(`trust root not found: ${dir} (S4.2: refusing to verify without a trusted key bundle)`);
+    throw new Error(
+      `trust root not found: ${dir} (S4.2: refusing to verify without a trusted key bundle)`,
+    );
   }
-  const { readdir } = await import("node:fs/promises");
+  const { readdir } = await import('node:fs/promises');
   const entries = await readdir(dir);
   const keys = new Map<string, TrustedKey>();
   for (const entry of entries) {
-    if (!entry.endsWith(".pub")) continue;
-    const keyIdFromFile = entry.slice(0, -".pub".length);
+    if (!entry.endsWith('.pub')) continue;
+    const keyIdFromFile = entry.slice(0, -'.pub'.length);
     const fullPath = path.join(dir, entry);
     const raw = parsePubFile(await readFile(fullPath));
     const pub = importPublicKey(raw);
@@ -81,21 +83,27 @@ export function resolverFromTrustRoot(root: TrustRoot): TrustResolver {
 function parsePubFile(contents: Buffer): Uint8Array {
   const KEY_BYTES = 32;
   // Hex form? A 64-char hex line.
-  const text = contents.toString("utf8").trim();
-  const firstLine = text.split("\n", 1)[0]!.trim();
+  const text = contents.toString('utf8').trim();
+  const firstLine = text.split('\n', 1)[0]!.trim();
   if (/^[0-9a-fA-F]{64}$/.test(firstLine)) {
-    return Uint8Array.from(Buffer.from(firstLine, "hex"));
+    return Uint8Array.from(Buffer.from(firstLine, 'hex'));
   }
   // Otherwise raw bytes (first 32).
   if (contents.length >= KEY_BYTES) {
     return Uint8Array.from(contents.subarray(0, KEY_BYTES));
   }
-  throw new Error(`public key file is ${contents.length} bytes; expected >= 32 raw or 64 hex chars`);
+  throw new Error(
+    `public key file is ${contents.length} bytes; expected >= 32 raw or 64 hex chars`,
+  );
 }
 
 /** Write a trusted public key file (32 raw bytes) to `<dir>/<keyId>.pub`. */
-export async function writeTrustedKey(dir: string, keyId: string, rawPublicKey: Uint8Array): Promise<void> {
-  const { mkdir, writeFile } = await import("node:fs/promises");
+export async function writeTrustedKey(
+  dir: string,
+  keyId: string,
+  rawPublicKey: Uint8Array,
+): Promise<void> {
+  const { mkdir, writeFile } = await import('node:fs/promises');
   await mkdir(dir, { recursive: true });
   await writeFile(path.join(dir, `${keyId}.pub`), Buffer.from(rawPublicKey));
 }

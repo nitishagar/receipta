@@ -4,14 +4,14 @@
  * `outcome: "success"`; Phase 4 must flip it to `"error"`.
  */
 export const openai2xxBodyError = {
-  name: "openai-2xx-body-error",
+  name: 'openai-2xx-body-error',
   streaming: false,
   body: {
-    error: { message: "upstream model unavailable", type: "gateway_error", code: "model_down" },
+    error: { message: 'upstream model unavailable', type: 'gateway_error', code: 'model_down' },
   },
-  headers: { "content-type": "application/json", "x-request-id": "req-2xx-err-005" },
+  headers: { 'content-type': 'application/json', 'x-request-id': 'req-2xx-err-005' },
   expect: {
-    request_id: "req-2xx-err-005",
-    outcome: "error" as const,
+    request_id: 'req-2xx-err-005',
+    outcome: 'error' as const,
   },
 } as const;

@@ -5,7 +5,9 @@
   "description": "opencode-derived monochrome design tokens for the receipta docs theme. Tested source of truth for palette, typography, radii, and borders.",
   "license": "Apache-2.0",
   "type": "module",
-  "files": ["src"],
+  "files": [
+    "src"
+  ],
   "engines": {
     "node": ">=20"
   },

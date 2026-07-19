@@ -20,7 +20,7 @@ A receipta receipt is a JSON object: a `body` (the signed payload) and a detache
     "outcome": "success",
     "content_captured": true,
     "capture_mode": "full",
-    "content": { "request": { /* ... */ }, "response": { /* ... */ } },
+    "content": { "request": {/* ... */}, "response": {/* ... */} },
     "content_commitments": {
       "request": "b9d0...f1a2",
       "response": "7c4e...88ab",
@@ -35,29 +35,29 @@ A receipta receipt is a JSON object: a `body` (the signed payload) and a detache
 
 ## Fields
 
-| Field | Meaning | Invariant |
-| --- | --- | --- |
-| `schema_version` | `"receipta.v0"` — gates verification | S1.8 |
-| `suite` | `"ed25519"` — the signature suite (permits ML-DSA/FIPS later) | S1.8 |
-| `chain_id` | UUID of the store/chain this receipt belongs to | S1.5 |
-| `seq` | 1-based sequence within the chain | S1.5 |
-| `prev_hash` | hex SHA-256 of the previous receipt body (all-zero for seq 1) | S1.5 |
-| `key_id` | hex SHA-256 of the signing public key | S3.1 |
-| `timestamp.iso8601_ms` | UTC millisecond ISO-8601 timestamp | S1.7 |
-| `timestamp.trust_level` | `local_asserted` \| `rfc3161` \| `transparency_log` \| `witness` | S1.7 |
-| `actor` | Who/what made the decision (distinct from the signing key) | S3.2 |
-| `provider` | `"openai"` \| `"anthropic"` \| `"vercel-ai-sdk"` \| … | — |
-| `model` | The model that answered | — |
-| `request_id` | The provider's request id (for correlation) | — |
-| `attempt_index` | Which retry attempt (best-effort) | S2.2 |
-| `outcome` | `"success"` \| `"error"` \| `"retry"` | S2.2 |
-| `content_captured` | Whether prompt/completion bytes are present | S1.3 |
-| `capture_mode` | `"full"` \| `"metadata_only"` | S1.3 |
-| `content` | Captured request/response (absent if metadata-only) | S1.3 |
-| `content_commitments` | HMAC-SHA256 + integrity digests over content | S1.4 |
-| `usage` | Token counts | — |
-| `anchor` | *(reserved)* external anchoring evidence | S1.6 |
-| `extensions` | Extension fields; `critical: true` unknowns fail verification | S1.8 |
+| Field                   | Meaning                                                          | Invariant |
+| ----------------------- | ---------------------------------------------------------------- | --------- |
+| `schema_version`        | `"receipta.v0"` — gates verification                             | S1.8      |
+| `suite`                 | `"ed25519"` — the signature suite (permits ML-DSA/FIPS later)    | S1.8      |
+| `chain_id`              | UUID of the store/chain this receipt belongs to                  | S1.5      |
+| `seq`                   | 1-based sequence within the chain                                | S1.5      |
+| `prev_hash`             | hex SHA-256 of the previous receipt body (all-zero for seq 1)    | S1.5      |
+| `key_id`                | hex SHA-256 of the signing public key                            | S3.1      |
+| `timestamp.iso8601_ms`  | UTC millisecond ISO-8601 timestamp                               | S1.7      |
+| `timestamp.trust_level` | `local_asserted` \| `rfc3161` \| `transparency_log` \| `witness` | S1.7      |
+| `actor`                 | Who/what made the decision (distinct from the signing key)       | S3.2      |
+| `provider`              | `"openai"` \| `"anthropic"` \| `"vercel-ai-sdk"` \| …            | —         |
+| `model`                 | The model that answered                                          | —         |
+| `request_id`            | The provider's request id (for correlation)                      | —         |
+| `attempt_index`         | Which retry attempt (best-effort)                                | S2.2      |
+| `outcome`               | `"success"` \| `"error"` \| `"retry"`                            | S2.2      |
+| `content_captured`      | Whether prompt/completion bytes are present                      | S1.3      |
+| `capture_mode`          | `"full"` \| `"metadata_only"`                                    | S1.3      |
+| `content`               | Captured request/response (absent if metadata-only)              | S1.3      |
+| `content_commitments`   | HMAC-SHA256 + integrity digests over content                     | S1.4      |
+| `usage`                 | Token counts                                                     | —         |
+| `anchor`                | _(reserved)_ external anchoring evidence                         | S1.6      |
+| `extensions`            | Extension fields; `critical: true` unknowns fail verification    | S1.8      |
 
 ## Canonicalization
 

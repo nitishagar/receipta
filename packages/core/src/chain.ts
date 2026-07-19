@@ -12,12 +12,12 @@
  * - Torn-tail vs tamper (S2.4): a malformed FINAL record is `recoverable-incomplete` (skip +
  *   warn, still non-zero exit); a malformed record in the MIDDLE is `tamper` (hard fail).
  */
-import { canonicalForSigning, receiptBodyHash, type Receipt, type ReceiptBody } from "./schema.js";
-import { sign as cryptoSign, type KeyPair } from "./crypto.js";
-import { readAll } from "./store.js";
+import { canonicalForSigning, receiptBodyHash, type Receipt, type ReceiptBody } from './schema.js';
+import { sign as cryptoSign, type KeyPair } from './crypto.js';
+import { readAll } from './store.js';
 
 /** The genesis prev_hash (seq 0's predecessor): SHA-256 of nothing → all-zero hex by convention. */
-export const GENESIS_HASH = "0".repeat(64);
+export const GENESIS_HASH = '0'.repeat(64);
 
 export interface Signer {
   keyId: string;
@@ -29,7 +29,7 @@ export function keyPairSigner(kp: KeyPair): Signer {
   return {
     keyId: kp.keyId,
     sign(canonicalBody: string) {
-      return cryptoSign(Buffer.from(canonicalBody, "utf8"), kp.privateKey);
+      return cryptoSign(Buffer.from(canonicalBody, 'utf8'), kp.privateKey);
     },
   };
 }
@@ -40,12 +40,15 @@ export function buildReceipt(args: {
   seq: number;
   chainId: string;
   signer: Signer;
-  body: Omit<ReceiptBody, "chain_id" | "seq" | "prev_hash" | "key_id" | "suite" | "schema_version"> &
-    Partial<Pick<ReceiptBody, "key_id" | "suite" | "schema_version">>;
+  body: Omit<
+    ReceiptBody,
+    'chain_id' | 'seq' | 'prev_hash' | 'key_id' | 'suite' | 'schema_version'
+  > &
+    Partial<Pick<ReceiptBody, 'key_id' | 'suite' | 'schema_version'>>;
 }): Receipt {
   const fullBody: ReceiptBody = {
-    schema_version: args.body.schema_version ?? "receipta.v0",
-    suite: args.body.suite ?? "ed25519",
+    schema_version: args.body.schema_version ?? 'receipta.v0',
+    suite: args.body.suite ?? 'ed25519',
     chain_id: args.chainId,
     seq: args.seq,
     prev_hash: args.prevHash,
@@ -67,13 +70,15 @@ export function buildReceipt(args: {
   };
   const canonical = canonicalForSigning(fullBody);
   const signature = args.signer.sign(canonical);
-  return { body: fullBody, signature: Buffer.from(signature).toString("hex") };
+  return { body: fullBody, signature: Buffer.from(signature).toString('hex') };
 }
 
 /** A public-key resolver: given a key_id, return the verifier (or undefined if untrusted). */
-export type TrustResolver = (keyId: string) => ((data: Uint8Array, sig: Uint8Array) => boolean) | undefined;
+export type TrustResolver = (
+  keyId: string,
+) => ((data: Uint8Array, sig: Uint8Array) => boolean) | undefined;
 
-export type DivergenceKind = "tamper" | "recoverable-incomplete" | "untrusted-key" | "malformed";
+export type DivergenceKind = 'tamper' | 'recoverable-incomplete' | 'untrusted-key' | 'malformed';
 
 export interface Divergence {
   /** Sequence number of the offending receipt (or -1 if the issue is pre-chain). */
@@ -110,12 +115,15 @@ export interface VerifyReport {
  * Torn-tail vs tamper (S2.4): a malformed FINAL record is `recoverable-incomplete`; a malformed
  * record in the middle is `tamper`.
  */
-export async function verifyChain(logPath: string, trustResolver: TrustResolver): Promise<VerifyReport> {
+export async function verifyChain(
+  logPath: string,
+  trustResolver: TrustResolver,
+): Promise<VerifyReport> {
   const receipts: Receipt[] = [];
   const malformed: Array<{ index: number; error: Error; isLast: boolean }> = [];
 
   for await (const rec of readAll(logPath)) {
-    if ("error" in rec) {
+    if ('error' in rec) {
       malformed.push({ index: rec.index, error: rec.error, isLast: rec.isLast });
       continue;
     }
@@ -130,9 +138,9 @@ export async function verifyChain(logPath: string, trustResolver: TrustResolver)
         verifiedCount: receipts.length,
         firstDivergence: {
           receiptSeq: receipts[m.index]?.body.seq ?? m.index,
-          field: "record",
+          field: 'record',
           reason: `malformed record in the middle of the chain: ${m.error.message}`,
-          kind: "tamper",
+          kind: 'tamper',
         },
         receipts,
       };
@@ -150,12 +158,26 @@ export async function verifyChain(logPath: string, trustResolver: TrustResolver)
     const b = r.body;
 
     // 1. schema version / suite / critical extensions.
-    if (b.schema_version !== "receipta.v0") {
-      return fail(i, b.seq, "schema_version", `unsupported schema_version "${b.schema_version}"`, "tamper", receipts);
+    if (b.schema_version !== 'receipta.v0') {
+      return fail(
+        i,
+        b.seq,
+        'schema_version',
+        `unsupported schema_version "${b.schema_version}"`,
+        'tamper',
+        receipts,
+      );
     }
-    if (b.suite !== "ed25519") {
+    if (b.suite !== 'ed25519') {
       // A non-ed25519 suite is unknown to v0.1. If treated as critical (suites always are), fail.
-      return fail(i, b.seq, "suite", `unsupported signature suite "${b.suite}"`, "tamper", receipts);
+      return fail(
+        i,
+        b.seq,
+        'suite',
+        `unsupported signature suite "${b.suite}"`,
+        'tamper',
+        receipts,
+      );
     }
     if (b.extensions) {
       for (const [name, ext] of Object.entries(b.extensions)) {
@@ -165,7 +187,7 @@ export async function verifyChain(logPath: string, trustResolver: TrustResolver)
             b.seq,
             `extensions.${name}`,
             `unknown critical extension "${name}" — refusing to verify (S1.8)`,
-            "tamper",
+            'tamper',
             receipts,
           );
         }
@@ -175,7 +197,14 @@ export async function verifyChain(logPath: string, trustResolver: TrustResolver)
     // 2. chain identity.
     if (chainId === null) chainId = b.chain_id;
     else if (b.chain_id !== chainId) {
-      return fail(i, b.seq, "chain_id", `chain_id changed mid-chain: ${chainId} → ${b.chain_id}`, "tamper", receipts);
+      return fail(
+        i,
+        b.seq,
+        'chain_id',
+        `chain_id changed mid-chain: ${chainId} → ${b.chain_id}`,
+        'tamper',
+        receipts,
+      );
     }
 
     // 3. sequence + prev_hash linkage (the core of S1.5).
@@ -183,9 +212,9 @@ export async function verifyChain(logPath: string, trustResolver: TrustResolver)
       return fail(
         i,
         b.seq,
-        "seq",
+        'seq',
         `expected seq ${expectedSeq} but found ${b.seq} (insertion/deletion/reorder)`,
-        "tamper",
+        'tamper',
         receipts,
       );
     }
@@ -193,9 +222,9 @@ export async function verifyChain(logPath: string, trustResolver: TrustResolver)
       return fail(
         i,
         b.seq,
-        "prev_hash",
+        'prev_hash',
         `prev_hash ${b.prev_hash} does not match recomputed ${prevHash} (mutation/reorder)`,
-        "tamper",
+        'tamper',
         receipts,
       );
     }
@@ -206,19 +235,33 @@ export async function verifyChain(logPath: string, trustResolver: TrustResolver)
       return fail(
         i,
         b.seq,
-        "key_id",
+        'key_id',
         `no trusted public key for key_id ${b.key_id} (S4.2: refuse to verify against untrusted key)`,
-        "untrusted-key",
+        'untrusted-key',
         receipts,
       );
     }
     const canonical = canonicalForSigning(b);
-    const sigBytes = Buffer.from(r.signature, "hex");
+    const sigBytes = Buffer.from(r.signature, 'hex');
     if (sigBytes.length !== 64) {
-      return fail(i, b.seq, "signature", `signature is ${sigBytes.length} bytes, expected 64 (Ed25519)`, "tamper", receipts);
+      return fail(
+        i,
+        b.seq,
+        'signature',
+        `signature is ${sigBytes.length} bytes, expected 64 (Ed25519)`,
+        'tamper',
+        receipts,
+      );
     }
-    if (!verifier(Buffer.from(canonical, "utf8"), sigBytes)) {
-      return fail(i, b.seq, "signature", "signature does not verify under the trusted key (forgery/mutation)", "tamper", receipts);
+    if (!verifier(Buffer.from(canonical, 'utf8'), sigBytes)) {
+      return fail(
+        i,
+        b.seq,
+        'signature',
+        'signature does not verify under the trusted key (forgery/mutation)',
+        'tamper',
+        receipts,
+      );
     }
 
     // 5. recompute this receipt's body hash to advance the chain (defense in depth, D1).
@@ -234,9 +277,9 @@ export async function verifyChain(logPath: string, trustResolver: TrustResolver)
       verifiedCount: receipts.length,
       firstDivergence: {
         receiptSeq: receipts[receipts.length - 1]!.body.seq,
-        field: "tail",
+        field: 'tail',
         reason: `torn final record (recoverable-incomplete): ${tornTail.error.message}`,
-        kind: "recoverable-incomplete",
+        kind: 'recoverable-incomplete',
       },
       receipts,
     };
@@ -248,15 +291,20 @@ export async function verifyChain(logPath: string, trustResolver: TrustResolver)
       verifiedCount: 0,
       firstDivergence: {
         receiptSeq: 0,
-        field: "tail",
+        field: 'tail',
         reason: `torn final record and no valid receipts: ${tornTail.error.message}`,
-        kind: "recoverable-incomplete",
+        kind: 'recoverable-incomplete',
       },
       receipts,
     };
   }
 
-  return { ok: receipts.length > 0, verifiedCount: receipts.length, firstDivergence: null, receipts };
+  return {
+    ok: receipts.length > 0,
+    verifiedCount: receipts.length,
+    firstDivergence: null,
+    receipts,
+  };
 }
 
 function fail(

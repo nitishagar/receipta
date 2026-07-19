@@ -1,7 +1,7 @@
 // @ts-check
-import eslint from "@eslint/js";
-import tseslint from "typescript-eslint";
-import globals from "globals";
+import eslint from '@eslint/js';
+import tseslint from 'typescript-eslint';
+import globals from 'globals';
 
 /**
  * receipta root ESLint config (flat config, ESLint 9).
@@ -10,15 +10,15 @@ import globals from "globals";
 export default tseslint.config(
   {
     ignores: [
-      "dist/**",
-      "build/**",
-      "coverage/**",
-      "docs/.vitepress/dist/**",
-      "docs/.vitepress/cache/**",
+      'dist/**',
+      'build/**',
+      'coverage/**',
+      'docs/.vitepress/dist/**',
+      'docs/.vitepress/cache/**',
       // VitePress dep cache created at repo root when `vitepress` runs from root.
-      ".vitepress/**",
-      "**/*.tsbuildinfo",
-      "packages/*/dist/**",
+      '.vitepress/**',
+      '**/*.tsbuildinfo',
+      'packages/*/dist/**',
     ],
   },
   eslint.configs.recommended,
@@ -30,13 +30,13 @@ export default tseslint.config(
       },
     },
     rules: {
-      "@typescript-eslint/no-unused-vars": [
-        "error",
-        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
-      "@typescript-eslint/consistent-type-imports": [
-        "error",
-        { prefer: "type-imports", fixStyle: "inline-type-imports" },
+      '@typescript-eslint/consistent-type-imports': [
+        'error',
+        { prefer: 'type-imports', fixStyle: 'inline-type-imports' },
       ],
     },
   },

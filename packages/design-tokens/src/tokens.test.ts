@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from 'vitest';
 import {
   lightPalette,
   darkPalette,
@@ -8,7 +8,7 @@ import {
   border,
   sharedTokens,
   type Palette,
-} from "./tokens.js";
+} from './tokens.js';
 
 /*
  * INV-11 load-bearing: WCAG contrast ratio for body text, in BOTH themes.
@@ -20,9 +20,10 @@ type Hsl = { h: number; s: number; l: number; a: number };
 
 /** Parse "hsl(H, S%, L%)" or "hsla(H, S%, L%, A)". Throws on anything else. */
 function parseHsl(input: string): Hsl {
-  const m = /^hsla?\(\s*([0-9.]+)\s*,\s*([0-9.]+)%\s*,\s*([0-9.]+)%\s*(?:,\s*([0-9.]+))?\s*\)$/i.exec(
-    input.trim(),
-  );
+  const m =
+    /^hsla?\(\s*([0-9.]+)\s*,\s*([0-9.]+)%\s*,\s*([0-9.]+)%\s*(?:,\s*([0-9.]+))?\s*\)$/i.exec(
+      input.trim(),
+    );
   if (!m) throw new Error(`not a valid hsl()/hsla() color: ${input}`);
   return {
     h: Number(m[1]),
@@ -55,8 +56,7 @@ function hslToRgb({ h, s, l }: Hsl): [number, number, number] {
 /** WCAG relative luminance for an opaque color. */
 function relativeLuminance(hsl: Hsl): number {
   const [r, g, b] = hslToRgb(hsl);
-  const channel = (c: number): number =>
-    c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  const channel = (c: number): number => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
   return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
 }
 
@@ -79,32 +79,29 @@ function contrast(fgLum: number, bgLum: number): number {
 }
 
 const REQUIRED_PALETTE_KEYS: ReadonlyArray<keyof Palette> = [
-  "--receipta-c-bg",
-  "--receipta-c-bg-weak",
-  "--receipta-c-bg-weak-hover",
-  "--receipta-c-bg-strong",
-  "--receipta-c-bg-interactive",
-  "--receipta-c-text-strong",
-  "--receipta-c-text-muted",
-  "--receipta-c-text-subtle",
-  "--receipta-c-text-inverted",
-  "--receipta-c-border",
-  "--receipta-c-border-weak",
+  '--receipta-c-bg',
+  '--receipta-c-bg-weak',
+  '--receipta-c-bg-weak-hover',
+  '--receipta-c-bg-strong',
+  '--receipta-c-bg-interactive',
+  '--receipta-c-text-strong',
+  '--receipta-c-text-muted',
+  '--receipta-c-text-subtle',
+  '--receipta-c-text-inverted',
+  '--receipta-c-border',
+  '--receipta-c-border-weak',
 ];
 
-describe("design tokens — structural validity", () => {
-  for (const [name, palette] of Object.entries(palettes) as [
-    "light" | "dark",
-    Palette,
-  ][]) {
+describe('design tokens — structural validity', () => {
+  for (const [name, palette] of Object.entries(palettes) as ['light' | 'dark', Palette][]) {
     describe(`${name} palette`, () => {
-      it("has every required key", () => {
+      it('has every required key', () => {
         for (const key of REQUIRED_PALETTE_KEYS) {
           expect(palette, `missing ${key} in ${name}`).toHaveProperty(key);
         }
       });
 
-      it("every color token is valid hsl()/hsla()", () => {
+      it('every color token is valid hsl()/hsla()', () => {
         for (const key of REQUIRED_PALETTE_KEYS) {
           const val = palette[key];
           expect(() => parseHsl(val), `${key}=${val}`).not.toThrow();
@@ -117,10 +114,10 @@ describe("design tokens — structural validity", () => {
         }
       });
 
-      it("no saturated hue outside the pale-yellow interactive token (INV-12)", () => {
+      it('no saturated hue outside the pale-yellow interactive token (INV-12)', () => {
         for (const key of REQUIRED_PALETTE_KEYS) {
           const hsl = parseHsl(palette[key]);
-          if (key === "--receipta-c-bg-interactive") {
+          if (key === '--receipta-c-bg-interactive') {
             // Pale-yellow focus/selection accent is the ONE permitted non-neutral.
             expect(hsl.h).toBeGreaterThanOrEqual(40);
             expect(hsl.h).toBeLessThanOrEqual(80);
@@ -136,99 +133,86 @@ describe("design tokens — structural validity", () => {
     });
   }
 
-  it("typography exposes mono + sans stacks", () => {
-    expect(typography["--receipta-font-mono"]).toContain("IBM Plex Mono");
-    expect(typography["--receipta-font-sans"]).toContain("IBM Plex Sans");
+  it('typography exposes mono + sans stacks', () => {
+    expect(typography['--receipta-font-mono']).toContain('IBM Plex Mono');
+    expect(typography['--receipta-font-sans']).toContain('IBM Plex Sans');
   });
 
-  it("radii are the crisp set (2/4/6/8px)", () => {
+  it('radii are the crisp set (2/4/6/8px)', () => {
     const vals = Object.values(radius).sort();
-    expect(vals).toEqual(["2px", "4px", "6px", "8px"]);
+    expect(vals).toEqual(['2px', '4px', '6px', '8px']);
   });
 
-  it("border is a 1px hairline", () => {
-    expect(border["--receipta-border-width"]).toBe("1px");
+  it('border is a 1px hairline', () => {
+    expect(border['--receipta-border-width']).toBe('1px');
   });
 
-  it("shared tokens aggregate typography + radius + border", () => {
-    expect(sharedTokens["--receipta-font-mono"]).toBeDefined();
-    expect(sharedTokens["--receipta-radius-sm"]).toBeDefined();
-    expect(sharedTokens["--receipta-border-width"]).toBeDefined();
+  it('shared tokens aggregate typography + radius + border', () => {
+    expect(sharedTokens['--receipta-font-mono']).toBeDefined();
+    expect(sharedTokens['--receipta-radius-sm']).toBeDefined();
+    expect(sharedTokens['--receipta-border-width']).toBeDefined();
   });
 });
 
-describe("design tokens — WCAG contrast (INV-11)", () => {
+describe('design tokens — WCAG contrast (INV-11)', () => {
   it.each([
-    ["light", lightPalette],
-    ["dark", darkPalette],
-  ] as const)("body text ≥ 4.5:1 vs background (%s theme)", (_name, palette) => {
-    const bgLum = relativeLuminance(parseHsl(palette["--receipta-c-bg"]));
-    for (const key of [
-      "--receipta-c-text-strong",
-      "--receipta-c-text-muted",
-    ] as const) {
+    ['light', lightPalette],
+    ['dark', darkPalette],
+  ] as const)('body text ≥ 4.5:1 vs background (%s theme)', (_name, palette) => {
+    const bgLum = relativeLuminance(parseHsl(palette['--receipta-c-bg']));
+    for (const key of ['--receipta-c-text-strong', '--receipta-c-text-muted'] as const) {
       const fgLum = relativeLuminance(parseHsl(palette[key]));
       const ratio = contrast(fgLum, bgLum);
-      expect(ratio, `${key} contrast ${ratio.toFixed(2)} < 4.5`).toBeGreaterThanOrEqual(
-        4.5,
-      );
+      expect(ratio, `${key} contrast ${ratio.toFixed(2)} < 4.5`).toBeGreaterThanOrEqual(4.5);
     }
   });
 
   it.each([
-    ["light", lightPalette],
-    ["dark", darkPalette],
+    ['light', lightPalette],
+    ['dark', darkPalette],
   ] as const)(
-    "secondary/subtle text ≥ 3:1 vs background (large/secondary floor, %s)",
+    'secondary/subtle text ≥ 3:1 vs background (large/secondary floor, %s)',
     (_name, palette) => {
-      const bgLum = relativeLuminance(parseHsl(palette["--receipta-c-bg"]));
-      const subtleLum = relativeLuminance(parseHsl(palette["--receipta-c-text-subtle"]));
+      const bgLum = relativeLuminance(parseHsl(palette['--receipta-c-bg']));
+      const subtleLum = relativeLuminance(parseHsl(palette['--receipta-c-text-subtle']));
       // text-subtle is explicitly large/secondary-only (documented in tokens.ts).
       expect(contrast(subtleLum, bgLum)).toBeGreaterThanOrEqual(3);
     },
   );
 
   it.each([
-    ["light", lightPalette],
-    ["dark", darkPalette],
-  ] as const)(
-    "inverted text on bg-strong ≥ 4.5:1 (%s — CTA fill legibility)",
-    (_name, palette) => {
-      const strongLum = relativeLuminance(parseHsl(palette["--receipta-c-bg-strong"]));
-      const invLum = relativeLuminance(parseHsl(palette["--receipta-c-text-inverted"]));
-      expect(contrast(invLum, strongLum)).toBeGreaterThanOrEqual(4.5);
-    },
-  );
+    ['light', lightPalette],
+    ['dark', darkPalette],
+  ] as const)('inverted text on bg-strong ≥ 4.5:1 (%s — CTA fill legibility)', (_name, palette) => {
+    const strongLum = relativeLuminance(parseHsl(palette['--receipta-c-bg-strong']));
+    const invLum = relativeLuminance(parseHsl(palette['--receipta-c-text-inverted']));
+    expect(contrast(invLum, strongLum)).toBeGreaterThanOrEqual(4.5);
+  });
 
-  it("translucent border-weak composites to a perceptible hairline (not invisible)", () => {
-    for (const [name, palette] of Object.entries(palettes) as [
-      "light" | "dark",
-      Palette,
-    ][]) {
-      const bgLum = relativeLuminance(parseHsl(palette["--receipta-c-bg"]));
-      const borderLum = luminanceOn(parseHsl(palette["--receipta-c-border-weak"]), bgLum);
+  it('translucent border-weak composites to a perceptible hairline (not invisible)', () => {
+    for (const [name, palette] of Object.entries(palettes) as ['light' | 'dark', Palette][]) {
+      const bgLum = relativeLuminance(parseHsl(palette['--receipta-c-bg']));
+      const borderLum = luminanceOn(parseHsl(palette['--receipta-c-border-weak']), bgLum);
       // A visible hairline differs from its background (ratio > 1 means perceptible).
-      expect(contrast(borderLum, bgLum), `${name} border-weak invisible`).toBeGreaterThan(
-        1.05,
-      );
+      expect(contrast(borderLum, bgLum), `${name} border-weak invisible`).toBeGreaterThan(1.05);
     }
   });
 });
 
-describe("design tokens — determinism", () => {
-  it("every color token is a stable literal hsl/hsla string (no Math.random at module load)", () => {
+describe('design tokens — determinism', () => {
+  it('every color token is a stable literal hsl/hsla string (no Math.random at module load)', () => {
     // A real non-randomness check: assert each value is one of the known-good
     // literals. If tokens.ts ever pulled in randomness, these fixed expectations
     // would fail. (Comparing the module to itself, as a prior version did, is a
     // tautology — the cached export always equals itself.)
-    const expectedLightBg = "hsl(0, 20%, 99%)";
-    const expectedDarkBg = "hsl(0, 9%, 7%)";
-    expect(lightPalette["--receipta-c-bg"]).toBe(expectedLightBg);
-    expect(darkPalette["--receipta-c-bg"]).toBe(expectedDarkBg);
-    expect(lightPalette["--receipta-c-bg-interactive"]).toBe("hsl(62, 84%, 88%)");
-    expect(darkPalette["--receipta-c-bg-interactive"]).toBe("hsl(62, 100%, 90%)");
+    const expectedLightBg = 'hsl(0, 20%, 99%)';
+    const expectedDarkBg = 'hsl(0, 9%, 7%)';
+    expect(lightPalette['--receipta-c-bg']).toBe(expectedLightBg);
+    expect(darkPalette['--receipta-c-bg']).toBe(expectedDarkBg);
+    expect(lightPalette['--receipta-c-bg-interactive']).toBe('hsl(62, 84%, 88%)');
+    expect(darkPalette['--receipta-c-bg-interactive']).toBe('hsl(62, 100%, 90%)');
     // Re-import yields the SAME values (module-eval order doesn't reshuffle them).
-    const again = lightPalette["--receipta-c-border"];
-    expect(again).toBe("hsl(30, 2%, 81%)");
+    const again = lightPalette['--receipta-c-border'];
+    expect(again).toBe('hsl(30, 2%, 81%)');
   });
 });

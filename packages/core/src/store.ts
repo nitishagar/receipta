@@ -14,12 +14,12 @@
  * - Per-store identity (D3): a `chain_id` (random UUID) and a `commitment_key` (random 32 bytes,
  *   for HMAC commitments — D10) are created once on open and stored in a sidecar `.meta.json`.
  */
-import { open, readFile, rename, mkdir, unlink } from "node:fs/promises";
-import { existsSync } from "node:fs";
-import { randomUUID, randomBytes } from "node:crypto";
-import * as path from "node:path";
-import { canonicalize } from "./canon.js";
-import { canonicalForSigning, receiptBodyHash, type Receipt, type ReceiptBody } from "./schema.js";
+import { open, readFile, rename, mkdir, unlink } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { randomUUID, randomBytes } from 'node:crypto';
+import * as path from 'node:path';
+import { canonicalize } from './canon.js';
+import { canonicalForSigning, receiptBodyHash, type Receipt, type ReceiptBody } from './schema.js';
 
 /** The sidecar holding per-store identity (chain_id + commitment_key). */
 export interface StoreMeta {
@@ -31,10 +31,10 @@ export interface StoreMeta {
   store_version: string;
 }
 
-const STORE_VERSION = "receipta.store.v0";
-const META_SUFFIX = ".meta.json";
-const LOCK_SUFFIX = ".lock";
-const TMP_SUFFIX = ".tmp";
+const STORE_VERSION = 'receipta.store.v0';
+const META_SUFFIX = '.meta.json';
+const LOCK_SUFFIX = '.lock';
+const TMP_SUFFIX = '.tmp';
 
 /** A frame: 4-byte big-endian length, then the bytes, then a 0x0a terminator. */
 const LENGTH_PREFIX_BYTES = 4;
@@ -118,7 +118,7 @@ export async function appendReceipt(store: ReceiptStore, receipt: Receipt): Prom
           `or use appendBody for the concurrency-safe path.`,
       );
     }
-    const bytes = Buffer.from(canonicalize(receipt as unknown as Record<string, unknown>), "utf8");
+    const bytes = Buffer.from(canonicalize(receipt as unknown as Record<string, unknown>), 'utf8');
     const frame = frameRecord(bytes);
     await atomicAppend(store.path, frame);
     const newTip = receiptBodyHash(receipt.body);
@@ -137,15 +137,15 @@ export async function appendBody(
   store: ReceiptStore,
   body: Omit<
     ReceiptBody,
-    "chain_id" | "seq" | "prev_hash" | "key_id" | "suite" | "schema_version"
+    'chain_id' | 'seq' | 'prev_hash' | 'key_id' | 'suite' | 'schema_version'
   > &
-    Partial<Pick<ReceiptBody, "key_id" | "suite" | "schema_version">>,
+    Partial<Pick<ReceiptBody, 'key_id' | 'suite' | 'schema_version'>>,
   signer: { keyId: string; sign: (canonicalBody: string) => Uint8Array },
 ): Promise<Receipt> {
   return appendMutex.run(async () => {
     const fullBody: ReceiptBody = {
-      schema_version: body.schema_version ?? "receipta.v0",
-      suite: body.suite ?? "ed25519",
+      schema_version: body.schema_version ?? 'receipta.v0',
+      suite: body.suite ?? 'ed25519',
       ...body,
       chain_id: store.meta.chain_id,
       seq: store.lastSeq + 1,
@@ -156,9 +156,9 @@ export async function appendBody(
     const signature = signer.sign(canonical);
     const receipt: Receipt = {
       body: fullBody,
-      signature: Buffer.from(signature).toString("hex"),
+      signature: Buffer.from(signature).toString('hex'),
     };
-    const bytes = Buffer.from(canonicalize(receipt as unknown as Record<string, unknown>), "utf8");
+    const bytes = Buffer.from(canonicalize(receipt as unknown as Record<string, unknown>), 'utf8');
     const frame = frameRecord(bytes);
     await atomicAppend(store.path, frame);
     store.lastHash = receiptBodyHash(fullBody);
@@ -183,7 +183,7 @@ export async function* readAll(
   const abs = path.resolve(logPath);
   if (!existsSync(abs)) return;
 
-  const handle = await open(abs, "r");
+  const handle = await open(abs, 'r');
   try {
     const stat = await handle.stat();
     const totalSize = stat.size;
@@ -260,7 +260,7 @@ export async function* readAll(
 
       let parsed: Receipt;
       try {
-        parsed = JSON.parse(raw.toString("utf8")) as Receipt;
+        parsed = JSON.parse(raw.toString('utf8')) as Receipt;
       } catch (e) {
         yield {
           error: e instanceof Error ? e : new Error(String(e)),
@@ -309,7 +309,7 @@ async function atomicAppend(logPath: string, frame: Buffer): Promise<void> {
   }
   const combined = Buffer.concat([existing, frame]);
   // Write temp, fsync, rename.
-  const fh = await open(tmpPath, "w");
+  const fh = await open(tmpPath, 'w');
   try {
     await fh.writeFile(combined);
     await fh.sync(); // fsync the temp before the rename — durability (S2.4)
@@ -321,7 +321,7 @@ async function atomicAppend(logPath: string, frame: Buffer): Promise<void> {
 
 async function loadOrCreateMeta(metaPath: string): Promise<StoreMeta> {
   if (existsSync(metaPath)) {
-    const text = await readFile(metaPath, "utf8");
+    const text = await readFile(metaPath, 'utf8');
     const meta = JSON.parse(text) as StoreMeta;
     if (!meta.chain_id || !meta.commitment_key) {
       throw new Error(`store meta at ${metaPath} is malformed (missing chain_id/commitment_key)`);
@@ -330,16 +330,16 @@ async function loadOrCreateMeta(metaPath: string): Promise<StoreMeta> {
   }
   const meta: StoreMeta = {
     chain_id: randomUUID(),
-    commitment_key: randomBytes(32).toString("hex"),
+    commitment_key: randomBytes(32).toString('hex'),
     store_version: STORE_VERSION,
   };
   // Write meta atomically (temp → fsync → rename), so a crash mid-create can't leave a half meta.
   // fsync matches atomicAppend's durability contract (S2.4) — the chain_id/commitment_key must
   // survive a crash to be reproducible.
   const tmp = metaPath + TMP_SUFFIX;
-  const tmpHandle = await open(tmp, "w");
+  const tmpHandle = await open(tmp, 'w');
   try {
-    await tmpHandle.writeFile(JSON.stringify(meta, null, 2), "utf8");
+    await tmpHandle.writeFile(JSON.stringify(meta, null, 2), 'utf8');
     await tmpHandle.sync();
   } finally {
     await tmpHandle.close();
@@ -349,12 +349,15 @@ async function loadOrCreateMeta(metaPath: string): Promise<StoreMeta> {
 }
 
 /** Scan the log to recover the current chain tip (last receipt's body hash) and seq. */
-async function scanTip(logPath: string, chainId: string): Promise<{ lastHash: string; lastSeq: number }> {
+async function scanTip(
+  logPath: string,
+  chainId: string,
+): Promise<{ lastHash: string; lastSeq: number }> {
   // The genesis tip is the zero hash, seq 0.
-  let lastHash = "0".repeat(64);
+  let lastHash = '0'.repeat(64);
   let lastSeq = 0;
   for await (const rec of readAll(logPath)) {
-    if ("error" in rec) {
+    if ('error' in rec) {
       // A torn/partial tail on open: we keep the tip at the last *valid* record and let the
       // user verify to surface it. Do not advance past a broken record.
       break;
@@ -377,7 +380,7 @@ async function acquireLock(lockPath: string): Promise<void> {
   // "wx" already implies O_EXCL so no flag constant is needed alongside it.
   let fh;
   try {
-    fh = await open(lockPath, "wx", 0o600);
+    fh = await open(lockPath, 'wx', 0o600);
     await fh.writeFile(`${process.pid}\n`);
     await fh.sync(); // ensure the pid is durably written before we consider the lock held
   } catch (e) {
@@ -398,7 +401,7 @@ async function acquireLock(lockPath: string): Promise<void> {
     // Re-throw only if it's a genuine "already exists" (EEXIST); other errors (e.g. permission)
     // are surfaced with context.
     const code = (e as NodeJS.ErrnoException).code;
-    if (code === "EEXIST") {
+    if (code === 'EEXIST') {
       throw new Error(
         `receipta store is locked by another writer: ${lockPath} exists.\n` +
           `v0.1 is single-writer per store. If no other process is running, remove the lockfile manually.`,

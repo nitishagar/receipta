@@ -7,24 +7,24 @@
  * passing after every later phase.
  */
 export const nvidiaLlamaStreaming = {
-  name: "nvidia-llama-streaming",
+  name: 'nvidia-llama-streaming',
   streaming: true,
   sseText: [
     'data: {"id":"chatcmpl-llama-1","object":"chat.completion.chunk","created":1720000000,"model":"meta/llama-3.1-8b-instruct","choices":[{"index":0,"delta":{"role":"assistant","content":"Hi"},"finish_reason":null}]}',
-    "",
+    '',
     'data: {"id":"chatcmpl-llama-1","object":"chat.completion.chunk","created":1720000000,"model":"meta/llama-3.1-8b-instruct","choices":[{"index":0,"delta":{"content":" there"},"finish_reason":null}]}',
-    "",
+    '',
     'data: {"id":"chatcmpl-llama-1","object":"chat.completion.chunk","created":1720000000,"model":"meta/llama-3.1-8b-instruct","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}',
-    "",
+    '',
     'data: {"id":"chatcmpl-llama-1","object":"chat.completion.chunk","created":1720000000,"model":"meta/llama-3.1-8b-instruct","choices":[],"usage":{"prompt_tokens":5,"completion_tokens":2,"total_tokens":7,"prompt_tokens_details":{"cached_tokens":0}}}',
-    "",
-    "data: [DONE]",
-    "",
-  ].join("\n"),
-  headers: { "content-type": "text/event-stream", "nvcf-reqid": "r-nvidia-llama-002" },
+    '',
+    'data: [DONE]',
+    '',
+  ].join('\n'),
+  headers: { 'content-type': 'text/event-stream', 'nvcf-reqid': 'r-nvidia-llama-002' },
   expect: {
     // request_id still captured from nvcf-reqid once Phase 2 widens the list; today undefined.
     usage: { input_tokens: 5, output_tokens: 2 },
-    contentText: "Hi there",
+    contentText: 'Hi there',
   },
 } as const;

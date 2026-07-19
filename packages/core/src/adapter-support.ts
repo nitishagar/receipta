@@ -22,16 +22,10 @@
  * Provider-specific differences (which header carries the request id, how usage/finish are spelled
  * in the response body) are supplied by a `ProviderAdapter`, so this module is genuinely shared.
  */
-import { Buffer } from "node:buffer";
-import { hmac, sha256, sign, toHex, type KeyPair } from "./crypto.js";
-import type {
-  Actor,
-  ContentCaptureMode,
-  JsonValue,
-  ReceiptBody,
-  Usage,
-} from "./schema.js";
-import type { ReceiptStore } from "./store.js";
+import { Buffer } from 'node:buffer';
+import { hmac, sha256, sign, toHex, type KeyPair } from './crypto.js';
+import type { Actor, ContentCaptureMode, JsonValue, ReceiptBody, Usage } from './schema.js';
+import type { ReceiptStore } from './store.js';
 
 export type FetchLike = typeof globalThis.fetch;
 
@@ -46,7 +40,7 @@ export interface ProviderAdapter {
   /** Extract the model from a parsed response body (or undefined if absent). */
   extractModel(body: JsonValue): string | undefined;
   /** Extract a stable outcome from the HTTP status (e.g. success/error). */
-  outcomeFromStatus(status: number): "success" | "error";
+  outcomeFromStatus(status: number): 'success' | 'error';
   /**
    * Assemble a final message from a buffered Server-Sent-Events stream (D8, S2.5).
    *
@@ -96,9 +90,10 @@ export function createReceiptFetch(
   config: ReceiptCaptureConfig,
   baseFetch: FetchLike = globalThis.fetch,
 ): FetchLike {
-  const captureMode = config.captureMode ?? "full";
+  const captureMode = config.captureMode ?? 'full';
   const logError = config.logError ?? DEFAULT_ERROR_LOG;
-  const commitmentKey = config.commitmentKey ?? Buffer.from(config.store.meta.commitment_key, "hex");
+  const commitmentKey =
+    config.commitmentKey ?? Buffer.from(config.store.meta.commitment_key, 'hex');
   // Merge the provider override once, at construction (G1.2). The override wins per field: a
   // `requestIdHeaders` override REPLACES the builtin list (the caller knows their gateway). The
   // builtin supplies every required field, so the merged object satisfies ProviderAdapter.
@@ -113,10 +108,10 @@ export function createReceiptFetch(
     let requestModel: string | undefined;
     try {
       if (init?.body) {
-        const bodyText = typeof init.body === "string" ? init.body : "";
+        const bodyText = typeof init.body === 'string' ? init.body : '';
         if (bodyText) {
           requestBody = JSON.parse(bodyText) as JsonValue;
-          requestModel = pick(requestBody, "model") as string | undefined;
+          requestModel = pick(requestBody, 'model') as string | undefined;
         }
       }
     } catch {
@@ -137,7 +132,7 @@ export function createReceiptFetch(
         responseStatus: 0,
         responseBody: undefined,
         requestId: undefined,
-        outcome: "error",
+        outcome: 'error',
         attemptIndex: readAttemptIndex(init),
         captureMode,
       }).catch(() => undefined);
@@ -204,23 +199,24 @@ async function safeEmit(
     responseBody?: JsonValue;
     responseText?: string;
     requestId?: string;
-    outcome: "success" | "error";
+    outcome: 'success' | 'error';
     attemptIndex?: number;
     captureMode: ContentCaptureMode;
   },
 ): Promise<void> {
-  const { appendBody } = await import("./store.js");
+  const { appendBody } = await import('./store.js');
   const store = config.store;
 
   const model = info.responseBody
-    ? (provider.extractModel(info.responseBody) ?? info.requestModel ?? "unknown")
-    : (info.requestModel ?? "unknown");
+    ? (provider.extractModel(info.responseBody) ?? info.requestModel ?? 'unknown')
+    : (info.requestModel ?? 'unknown');
 
   const usage = info.responseBody ? provider.extractUsage(info.responseBody) : undefined;
 
   // Content + commitments. content_captured reflects whether we actually read content (S1.3).
-  const captured = info.captureMode === "full" && info.requestBody !== undefined;
-  const responseContent: JsonValue | undefined = info.responseBody ?? (info.responseText as string | undefined);
+  const captured = info.captureMode === 'full' && info.requestBody !== undefined;
+  const responseContent: JsonValue | undefined =
+    info.responseBody ?? (info.responseText as string | undefined);
   const content = captured
     ? {
         request: info.requestBody as JsonValue,
@@ -229,7 +225,12 @@ async function safeEmit(
     : undefined;
 
   // Privacy commitments (HMAC, D10) over request/response content.
-  const commitments = computeCommitments(commitmentKey, info.requestBody, info.responseBody, info.responseText);
+  const commitments = computeCommitments(
+    commitmentKey,
+    info.requestBody,
+    info.responseBody,
+    info.responseText,
+  );
 
   // G4.1: a 2xx response carrying a top-level JSON `error` object is a gateway soft-failure —
   // record outcome "error". Layered here (not in outcomeFromStatus) so the ProviderAdapter
@@ -237,16 +238,16 @@ async function safeEmit(
   // G4.2: non-error 2xx bodies and malformed/non-JSON bodies keep the status-based outcome —
   // bodyHasError returns false for non-objects/undefined, so no spurious "error".
   const outcome =
-    info.outcome === "success" && bodyHasError(info.responseBody) ? "error" : info.outcome;
+    info.outcome === 'success' && bodyHasError(info.responseBody) ? 'error' : info.outcome;
 
   const completionTime = new Date();
   const body: Omit<
     ReceiptBody,
-    "chain_id" | "seq" | "prev_hash" | "key_id" | "suite" | "schema_version"
+    'chain_id' | 'seq' | 'prev_hash' | 'key_id' | 'suite' | 'schema_version'
   > = {
     timestamp: {
       iso8601_ms: completionTime.toISOString(),
-      trust_level: "local_asserted",
+      trust_level: 'local_asserted',
     },
     actor: config.actor,
     provider: provider.provider,
@@ -265,7 +266,7 @@ async function safeEmit(
     await appendBody(store, body, config.signer);
   } catch (err) {
     // S2.1: emission failure must NOT fail the wrapped call. Log to sidecar.
-    logError("failed to append receipt", err);
+    logError('failed to append receipt', err);
   }
 }
 
@@ -275,18 +276,18 @@ function computeCommitments(
   requestBody?: JsonValue,
   responseBody?: JsonValue,
   responseText?: string,
-): ReceiptBody["content_commitments"] {
-  const out: NonNullable<ReceiptBody["content_commitments"]> = {};
+): ReceiptBody['content_commitments'] {
+  const out: NonNullable<ReceiptBody['content_commitments']> = {};
   if (requestBody !== undefined) {
-    const bytes = Buffer.from(JSON.stringify(requestBody), "utf8");
+    const bytes = Buffer.from(JSON.stringify(requestBody), 'utf8');
     out.request = toHex(hmac(key, bytes));
     out.request_integrity = toHex(sha256(bytes));
   }
   const respBytes =
     responseBody !== undefined
-      ? Buffer.from(JSON.stringify(responseBody), "utf8")
+      ? Buffer.from(JSON.stringify(responseBody), 'utf8')
       : responseText !== undefined
-        ? Buffer.from(responseText, "utf8")
+        ? Buffer.from(responseText, 'utf8')
         : undefined;
   if (respBytes) {
     out.response = toHex(hmac(key, respBytes));
@@ -298,19 +299,19 @@ function computeCommitments(
 /** Is this a streaming request (`stream: true` in the body)? */
 function isStreamingRequest(requestBody?: JsonValue): boolean {
   if (requestBody === undefined) return false;
-  const stream = pick(requestBody, "stream");
+  const stream = pick(requestBody, 'stream');
   return stream === true;
 }
 
 /** Is this an SSE response (content-type text/event-stream)? */
 function isEventStreamResponse(response: Response): boolean {
-  const ct = response.headers.get("content-type") ?? "";
-  return ct.includes("text/event-stream");
+  const ct = response.headers.get('content-type') ?? '';
+  return ct.includes('text/event-stream');
 }
 
 /** Read a property from a JSON object (case-insensitive on the top level). */
 function pick(obj: JsonValue, key: string): JsonValue | undefined {
-  if (obj && typeof obj === "object" && !Array.isArray(obj)) {
+  if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
     const lower = key.toLowerCase();
     for (const k of Object.keys(obj)) {
       if (k.toLowerCase() === lower) return (obj as Record<string, JsonValue>)[k];
@@ -334,7 +335,8 @@ function readRequestId(response: Response, headers: string[]): string | undefine
  * arrays, undefined, and bodies without a top-level error (G4.2: no spurious "error").
  */
 function bodyHasError(responseBody: JsonValue | undefined): boolean {
-  if (!responseBody || typeof responseBody !== "object" || Array.isArray(responseBody)) return false;
+  if (!responseBody || typeof responseBody !== 'object' || Array.isArray(responseBody))
+    return false;
   const err = (responseBody as Record<string, JsonValue>).error;
   return err !== undefined && err !== null;
 }
@@ -359,12 +361,12 @@ function readAttemptIndex(init?: RequestInit): number | undefined {
  */
 export function parseSseEvents(sseText: string): JsonValue[] {
   const events: JsonValue[] = [];
-  const lines = sseText.split("\n");
+  const lines = sseText.split('\n');
   for (const line of lines) {
     const trimmed = line.trimStart();
-    if (!trimmed.startsWith("data:")) continue;
+    if (!trimmed.startsWith('data:')) continue;
     const payload = trimmed.slice(5).trim();
-    if (payload === "" || payload === "[DONE]") continue;
+    if (payload === '' || payload === '[DONE]') continue;
     try {
       events.push(JSON.parse(payload) as JsonValue);
     } catch {
@@ -378,6 +380,6 @@ export function parseSseEvents(sseText: string): JsonValue[] {
 export function keyPairToSigner(kp: KeyPair) {
   return {
     keyId: kp.keyId,
-    sign: (canonicalBody: string) => sign(Buffer.from(canonicalBody, "utf8"), kp.privateKey),
+    sign: (canonicalBody: string) => sign(Buffer.from(canonicalBody, 'utf8'), kp.privateKey),
   };
 }
