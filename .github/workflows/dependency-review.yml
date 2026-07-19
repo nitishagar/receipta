@@ -1,9 +1,9 @@
 # Dependency review — flags vulnerable packages and incompatible licenses in pull requests.
 # Runs on PRs only; uses GitHub's dependency graph + advisory database (no install needed).
 #
-# NOTE: this job is non-blocking (continue-on-error) until the repo's Dependency Graph is enabled
-# (Settings → Code security and analysis → Dependency graph). With the graph enabled, flip
-# continue-on-error to false to enforce fail-on-severity: high on PRs.
+# The job skips (green) when the repo's Dependency Graph is not yet enabled — the action cannot run
+# without it. To enable enforcement: turn on Settings → Code security and analysis → Dependency
+# graph (a one-time toggle for the repo owner). Once on, this job runs the review for real.
 name: Dependency Review
 
 on:
@@ -16,14 +16,26 @@ permissions:
 jobs:
   dependency-review:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Check dependency graph availability
+        id: check-graph
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The dependency-review API endpoint returns 200 when the graph is enabled, 404 otherwise.
+          if gh api "repos/${{ github.repository }}/dependency-graph/sbom" >/dev/null 2>&1; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Dependency graph is not enabled for this repo — skipping review. Enable it in Settings → Code security and analysis."
+          fi
+
       - name: Dependency Review
+        if: steps.check-graph.outputs.enabled == 'true'
         uses: actions/dependency-review-action@v4
         with:
           # Fail on high/critical vulnerabilities or license violations; warn otherwise.
-          # (Enforced only once the Dependency Graph repo setting is enabled — see header.)
           fail-on-severity: high
