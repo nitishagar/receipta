@@ -6,7 +6,8 @@
  * import OpenAI from "openai";
  * import { withReceipts } from "@receipta/openai";
  *
- * const client = withReceipts(new OpenAI({ apiKey }), { store, signer, actor });
+ * // pass the constructor (NOT an instance) plus your options — receipta constructs the client.
+ * const client = withReceipts(OpenAI, { apiKey }, { store, signer, actor });
  * // use `client` exactly as you would a normal OpenAI instance — receipts are emitted per call.
  * const res = await client.chat.completions.create({ model: "gpt-4o", messages: [...] });
  * ```
@@ -28,8 +29,8 @@ import {
   type FetchLike,
   type JsonValue,
   parseSseEvents,
-} from "@receipta/core";
-import type { KeyPair } from "@receipta/core";
+} from '@receipta/core';
+import type { KeyPair } from '@receipta/core';
 
 /**
  * The OpenAI provider adapter — how to read OpenAI-specific fields out of a response.
@@ -40,13 +41,20 @@ import type { KeyPair } from "@receipta/core";
  * `apim-request-id`/`x-ms-request-id`, Cloudflare `cf-ray`), checked in priority order.
  */
 export const openaiProvider: ProviderAdapter = {
-  provider: "openai",
+  provider: 'openai',
   // Ordered: first present header wins. api.openai.com sends x-request-id, so it stays first.
-  requestIdHeaders: ["x-request-id", "request-id", "nvcf-reqid", "apim-request-id", "x-ms-request-id", "cf-ray"],
+  requestIdHeaders: [
+    'x-request-id',
+    'request-id',
+    'nvcf-reqid',
+    'apim-request-id',
+    'x-ms-request-id',
+    'cf-ray',
+  ],
   extractUsage(body) {
-    if (body && typeof body === "object" && !Array.isArray(body)) {
+    if (body && typeof body === 'object' && !Array.isArray(body)) {
       const usage = (body as Record<string, unknown>).usage;
-      if (usage && typeof usage === "object" && !Array.isArray(usage)) {
+      if (usage && typeof usage === 'object' && !Array.isArray(usage)) {
         const u = usage as Record<string, unknown>;
         return {
           input_tokens: num(u.prompt_tokens),
@@ -57,14 +65,14 @@ export const openaiProvider: ProviderAdapter = {
     return undefined;
   },
   extractModel(body) {
-    if (body && typeof body === "object" && !Array.isArray(body)) {
+    if (body && typeof body === 'object' && !Array.isArray(body)) {
       const m = (body as Record<string, unknown>).model;
-      return typeof m === "string" ? m : undefined;
+      return typeof m === 'string' ? m : undefined;
     }
     return undefined;
   },
   outcomeFromStatus(status) {
-    return status >= 200 && status < 300 ? "success" : "error";
+    return status >= 200 && status < 300 ? 'success' : 'error';
   },
   /**
    * Assemble a ChatCompletion from buffered streaming chunks (D8, S2.5).
@@ -86,55 +94,68 @@ export const openaiProvider: ProviderAdapter = {
     // Per-choice accumulator keyed by `index`. A Map (not an array) so sparse/late indices work.
     const choicesByIndex = new Map<number, ChoiceAccumulator>();
     for (const ev of events) {
-      if (!ev || typeof ev !== "object" || Array.isArray(ev)) continue;
+      if (!ev || typeof ev !== 'object' || Array.isArray(ev)) continue;
       const obj = ev as Record<string, unknown>;
-      if (typeof obj.id === "string") id = obj.id;
-      if (typeof obj.model === "string") model = obj.model;
+      if (typeof obj.id === 'string') id = obj.id;
+      if (typeof obj.model === 'string') model = obj.model;
       const choices = obj.choices;
       if (Array.isArray(choices)) {
         for (const c of choices as Array<Record<string, unknown>>) {
-          const index = typeof c.index === "number" ? c.index : 0;
+          const index = typeof c.index === 'number' ? c.index : 0;
           const existing = choicesByIndex.get(index);
-          const choice: ChoiceAccumulator =
-            existing ?? { index, content: "", reasoningContent: "", toolCalls: new Map<number, ToolCallAccumulator>() };
+          const choice: ChoiceAccumulator = existing ?? {
+            index,
+            content: '',
+            reasoningContent: '',
+            toolCalls: new Map<number, ToolCallAccumulator>(),
+          };
           if (!existing) choicesByIndex.set(index, choice);
           const delta = c.delta as Record<string, unknown> | undefined;
           if (delta) {
-            if (typeof delta.content === "string") choice.content += delta.content;
-            if (typeof delta.reasoning_content === "string") choice.reasoningContent += delta.reasoning_content;
+            if (typeof delta.content === 'string') choice.content += delta.content;
+            if (typeof delta.reasoning_content === 'string')
+              choice.reasoningContent += delta.reasoning_content;
             // Legacy function_call (deprecated by tool_calls, but still emitted by some models).
-            if (delta.function_call && typeof delta.function_call === "object" && !Array.isArray(delta.function_call)) {
+            if (
+              delta.function_call &&
+              typeof delta.function_call === 'object' &&
+              !Array.isArray(delta.function_call)
+            ) {
               const fc = delta.function_call as Record<string, unknown>;
               choice.functionCall = {
-                name: typeof fc.name === "string" ? fc.name : choice.functionCall?.name,
+                name: typeof fc.name === 'string' ? fc.name : choice.functionCall?.name,
                 arguments:
-                  typeof fc.arguments === "string"
-                    ? (choice.functionCall?.arguments ?? "") + fc.arguments
+                  typeof fc.arguments === 'string'
+                    ? (choice.functionCall?.arguments ?? '') + fc.arguments
                     : choice.functionCall?.arguments,
               };
             }
             // tool_calls: merge by `index`. Append function.arguments fragments; first non-null wins for id/type/name.
             if (Array.isArray(delta.tool_calls)) {
               for (const tc of delta.tool_calls as Array<Record<string, unknown>>) {
-                const tcIndex = typeof tc.index === "number" ? tc.index : 0;
+                const tcIndex = typeof tc.index === 'number' ? tc.index : 0;
                 const existingTc = choice.toolCalls.get(tcIndex);
-                const tcc: ToolCallAccumulator =
-                  existingTc ?? { index: tcIndex, function: { arguments: "" } };
+                const tcc: ToolCallAccumulator = existingTc ?? {
+                  index: tcIndex,
+                  function: { arguments: '' },
+                };
                 if (!existingTc) choice.toolCalls.set(tcIndex, tcc);
-                if (typeof tc.id === "string" && tcc.id === undefined) tcc.id = tc.id;
-                if (typeof tc.type === "string" && tcc.type === undefined) tcc.type = tc.type;
+                if (typeof tc.id === 'string' && tcc.id === undefined) tcc.id = tc.id;
+                if (typeof tc.type === 'string' && tcc.type === undefined) tcc.type = tc.type;
                 const fn = tc.function as Record<string, unknown> | undefined;
                 if (fn) {
-                  if (typeof fn.name === "string" && tcc.function.name === undefined) tcc.function.name = fn.name;
-                  if (typeof fn.arguments === "string") tcc.function.arguments += fn.arguments;
+                  if (typeof fn.name === 'string' && tcc.function.name === undefined)
+                    tcc.function.name = fn.name;
+                  if (typeof fn.arguments === 'string') tcc.function.arguments += fn.arguments;
                 }
               }
             }
           }
-          if (typeof c.finish_reason === "string" && c.finish_reason !== "null") choice.finishReason = c.finish_reason;
+          if (typeof c.finish_reason === 'string' && c.finish_reason !== 'null')
+            choice.finishReason = c.finish_reason;
         }
       }
-      if (obj.usage && typeof obj.usage === "object" && !Array.isArray(obj.usage)) {
+      if (obj.usage && typeof obj.usage === 'object' && !Array.isArray(obj.usage)) {
         usage = obj.usage as Record<string, unknown>;
       }
     }
@@ -152,16 +173,16 @@ export const openaiProvider: ProviderAdapter = {
             if (tcc.type !== undefined) out.type = tcc.type;
             return out;
           });
-        const message: Record<string, unknown> = { role: "assistant", content: acc.content };
+        const message: Record<string, unknown> = { role: 'assistant', content: acc.content };
         if (acc.reasoningContent) message.reasoning_content = acc.reasoningContent;
         if (toolCalls.length > 0) message.tool_calls = toolCalls;
         if (acc.functionCall) message.function_call = acc.functionCall;
-        return { index, message, finish_reason: acc.finishReason ?? "stop" };
+        return { index, message, finish_reason: acc.finishReason ?? 'stop' };
       });
     return {
-      id: id ?? "stream",
-      object: "chat.completion",
-      model: model ?? "unknown",
+      id: id ?? 'stream',
+      object: 'chat.completion',
+      model: model ?? 'unknown',
       choices,
       ...(usage ? { usage } : {}),
     } as unknown as JsonValue;
@@ -187,7 +208,7 @@ interface ToolCallAccumulator {
 }
 
 function num(v: unknown): number | undefined {
-  return typeof v === "number" ? v : undefined;
+  return typeof v === 'number' ? v : undefined;
 }
 
 /**
@@ -207,7 +228,7 @@ function num(v: unknown): number | undefined {
 export function withReceipts<T extends new (opts: Record<string, unknown>) => unknown>(
   Client: T,
   options: Record<string, unknown>,
-  capture: Omit<ReceiptCaptureConfig, "signer"> & { signer: KeyPair },
+  capture: Omit<ReceiptCaptureConfig, 'signer'> & { signer: KeyPair },
 ): InstanceType<T> {
   const receiptFetch = createReceiptFetch(
     openaiProvider,
@@ -217,10 +238,12 @@ export function withReceipts<T extends new (opts: Record<string, unknown>) => un
   return new Client({ ...options, fetch: receiptFetch }) as InstanceType<T>;
 }
 
-function toConfig(capture: Omit<ReceiptCaptureConfig, "signer"> & { signer: KeyPair }): ReceiptCaptureConfig {
+function toConfig(
+  capture: Omit<ReceiptCaptureConfig, 'signer'> & { signer: KeyPair },
+): ReceiptCaptureConfig {
   return { ...capture, signer: keyPairToSigner(capture.signer) };
 }
 
 // Re-export the pieces a user might want for custom integrations.
-export { createReceiptFetch, keyPairToSigner } from "@receipta/core";
-export type { ProviderAdapter, ReceiptCaptureConfig, FetchLike } from "@receipta/core";
+export { createReceiptFetch, keyPairToSigner } from '@receipta/core';
+export type { ProviderAdapter, ReceiptCaptureConfig, FetchLike } from '@receipta/core';

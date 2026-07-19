@@ -35,7 +35,7 @@
     "@receipta/core": "workspace:*"
   },
   "peerDependencies": {
-    "ai": ">=7 || >=6"
+    "ai": ">=6"
   },
   "peerDependenciesMeta": {
     "ai": {
