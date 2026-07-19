@@ -12,7 +12,7 @@ pnpm install
 
 Prerequisites:
 
-- **Node.js ≥ 20** (Node 22 LTS recommended)
+- **Node.js ≥ 22.13** (required by the pinned pnpm 11.4.0; Node 22 LTS or 24 recommended)
 - **pnpm 11.4.0** (pinned via corepack)
 
 Once installed, verify everything works:

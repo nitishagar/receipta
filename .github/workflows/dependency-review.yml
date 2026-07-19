@@ -1,5 +1,9 @@
 # Dependency review — flags vulnerable packages and incompatible licenses in pull requests.
 # Runs on PRs only; uses GitHub's dependency graph + advisory database (no install needed).
+#
+# NOTE: this job is non-blocking (continue-on-error) until the repo's Dependency Graph is enabled
+# (Settings → Code security and analysis → Dependency graph). With the graph enabled, flip
+# continue-on-error to false to enforce fail-on-severity: high on PRs.
 name: Dependency Review
 
 on:
@@ -12,6 +16,7 @@ permissions:
 jobs:
   dependency-review:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -19,5 +24,6 @@ jobs:
       - name: Dependency Review
         uses: actions/dependency-review-action@v4
         with:
-          # Fail the PR on high/critical vulnerabilities or license violations; warn otherwise.
+          # Fail on high/critical vulnerabilities or license violations; warn otherwise.
+          # (Enforced only once the Dependency Graph repo setting is enabled — see header.)
           fail-on-severity: high

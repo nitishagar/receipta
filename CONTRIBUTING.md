@@ -24,8 +24,8 @@ The full text of the DCO is at https://developercertificate.org/.
 
 ## Development setup
 
-Prerequisites: **Node.js ≥ 20** and **pnpm** (the repo pins `pnpm@11.4.0` via corepack —
-`corepack enable` then `corepack prepare pnpm@11.4.0 --activate`).
+Prerequisites: **Node.js ≥ 22.13** (the repo pins `pnpm@11.4.0`, which requires it) and **pnpm**
+(`corepack enable` then `corepack prepare pnpm@11.4.0 --activate`).
 
 ```bash
 git clone https://github.com/nitishagar/receipta.git

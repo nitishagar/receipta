@@ -1,5 +1,6 @@
 # CI — lint, format check, typecheck, coverage, build, verify:demo, docs build on every PR and push.
-# Frozen-lockfile installs for reproducibility (S5.5). Node 20/22/24 matrix (WI-11).
+# Frozen-lockfile installs for reproducibility (S5.5). Node 22/24 matrix: the repo pins pnpm@11.4.0,
+# which requires Node >=22.13, so Node 20 is not a supported runtime despite the historical >=20 claim.
 name: CI
 
 on:
@@ -20,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: ['20', '22', '24']
+        node-version: ['22', '24']
     steps:
       - uses: actions/checkout@v7
 
