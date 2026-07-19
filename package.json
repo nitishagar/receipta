@@ -25,16 +25,21 @@
     "lint": "eslint .",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "build": "pnpm -r --filter=./packages/* run build",
+    "coverage": "vitest run --coverage",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "build": "pnpm --filter @receipta/core --filter @receipta/design-tokens run build && pnpm --filter @receipta/openai --filter @receipta/anthropic --filter @receipta/vercel --filter @receipta/cli run build",
     "docs:build": "vitepress build docs",
     "docs:dev": "vitepress dev docs",
-    "verify:demo": "pnpm --filter @receipta/core build && node packages/core/scripts/verify-demo.mjs"
+    "verify:demo": "pnpm --filter @receipta/core build && node packages/core/scripts/verify-demo.mjs",
+    "example": "pnpm build && node examples/quickstart/run.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@fontsource/ibm-plex-mono": "^5.2.7",
     "@fontsource/ibm-plex-sans": "^5.2.8",
     "@types/node": "^22.10.0",
+    "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.7.0",
     "globals": "^17.7.0",
     "prettier": "^3.9.5",
