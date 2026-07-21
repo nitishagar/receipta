@@ -109,7 +109,7 @@ When no usage chunk arrives, the receipt records `usage: undefined` (honest abse
 
 ## Docs
 
-Full documentation: **https://nitishagar.github.io/receipta/adapters/openai**
+Full documentation: **<https://nitishagar.github.io/receipta/adapters/openai>**
 
 ## License
 

@@ -61,7 +61,7 @@ npx receipta verify ./receipts.log.receipta --trust-root keys/
 
 ## Docs
 
-Full documentation: **https://nitishagar.github.io/receipta/cli/**
+Full documentation: **<https://nitishagar.github.io/receipta/cli/>**
 
 ## License
 

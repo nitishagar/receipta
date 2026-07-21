@@ -87,7 +87,7 @@ holds the signing key. See the
 
 ## Docs
 
-Full documentation: **https://nitishagar.github.io/receipta/** — including the
+Full documentation: **<https://nitishagar.github.io/receipta/>** — including the
 [quickstart](https://nitishagar.github.io/receipta/guide/quickstart),
 [concepts](https://nitishagar.github.io/receipta/guide/concepts), and the
 [schema reference](https://nitishagar.github.io/receipta/schema/).

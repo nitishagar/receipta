@@ -20,7 +20,7 @@ This adds a `Signed-off-by: Your Name <you@example.com>` trailer. (This is **not
 it is the `Signed-off-by` line, same as the Linux kernel uses.) The `probot/dco` app enforces
 this on every pull request.
 
-The full text of the DCO is at https://developercertificate.org/.
+The full text of the DCO is at <https://developercertificate.org/>.
 
 ## Development setup
 
@@ -40,7 +40,7 @@ pnpm docs:dev         # local docs site (VitePress)
 
 ## Repository layout
 
-```
+```text
 packages/
   core/      # zero-runtime-dep foundation: schema, canon, crypto, store, chain, verify
   cli/       # the `receipta` binary

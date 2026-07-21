@@ -18,11 +18,11 @@ receipta is pre-1.0. Only the latest minor release line receives security fixes.
 
 Report vulnerabilities privately via GitHub's advisory feature:
 
-1. Go to https://github.com/nitishagar/receipta/security/advisories/new
+1. Go to <https://github.com/nitishagar/receipta/security/advisories/new>
 2. Fill in the details (affected component, reproduction, impact).
 3. Submit as a draft advisory.
 
-Alternatively, email the maintainer at **1592163+nitishagar@users.noreply.github.com** with the
+Alternatively, email the maintainer at **<1592163+nitishagar@users.noreply.github.com>** with the
 details (optionally PGP-encrypted; request a key if you need one).
 
 ### What to include

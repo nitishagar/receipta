@@ -94,7 +94,7 @@ const client = withReceipts(
 
 ## Docs
 
-Full documentation: **https://nitishagar.github.io/receipta/adapters/anthropic**
+Full documentation: **<https://nitishagar.github.io/receipta/adapters/anthropic>**
 
 ## License
 
