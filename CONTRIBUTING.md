@@ -74,14 +74,52 @@ Releases are tagged `v<version>` (e.g. `v0.3.0`) and cut from `main`. All `@rece
 are versioned in lockstep with the repo tag. The [`Publish`](/.github/workflows/publish.yml)
 workflow runs on every `v*` tag.
 
+Version bumps and the per-package `CHANGELOG.md` files are **changeset-managed**
+([changesets](https://github.com/changesets/changesets)) rather than hand-edited across files.
+`@receipta/design-tokens` (`private: true`) is excluded from the managed set; the root package is
+not published and its version is reconciled manually.
+
+### Adding a changeset
+
+For every consumer-visible change, add a changeset describing the affected package(s) and the bump
+level (`patch`/`minor`/`major`):
+
+```bash
+pnpm changeset
+```
+
+This writes a file under `.changeset/` (ephemeral fragments, not prose). Commit the changeset with
+its change. Multiple changesets may accumulate before a release.
+
 ### Cutting a release
 
-1. Update the version in every `packages/*/package.json` and the root `package.json`, add a dated
-   `[<version>]` section to [`CHANGELOG.md`](./CHANGELOG.md), and commit.
-2. Tag and push: `git tag v<version> && git push origin v<version>`.
-3. The Publish workflow builds all packages and publishes to npm with `--provenance`
+1. Consume the pending changesets and bump versions + per-package `CHANGELOG.md` files:
+
+   ```bash
+   pnpm run version
+   ```
+
+   (`pnpm run version`, not bare `pnpm version` — the latter is shadowed by pnpm's built-in version
+   command.) This rewrites each `packages/*/package.json` version, appends a dated section to that
+   package's own `CHANGELOG.md` from the changeset entries, and removes the consumed changeset
+   files. Internal dependents are bumped at the `patch` level (`updateInternalDependencies`).
+
+2. Review the diff, then commit the version bump.
+3. Tag and push: `git tag v<version> && git push origin v<version>`.
+4. The Publish workflow builds all packages and publishes to npm with `--provenance`
    (Sigstore/SLSA attestation). Confirm each `@receipta/*` package appears on npm with a
    "Provenance" badge.
+
+> **Root `CHANGELOG.md`:** changesets maintains a per-package changelog under each
+> `packages/*/CHANGELOG.md`. The root [`CHANGELOG.md`](./CHANGELOG.md) is the curated,
+> human-written release narrative — update it manually when cutting a release that warrants a
+> narrative entry. The two are complementary: per-package logs are machine-generated from
+> changesets; the root log is the release story.
+
+The tag-triggered `publish.yml` is unchanged by this flow — changesets manage versions and the
+per-package changelogs; the Publish workflow still runs on the tag. The `changesets/action`
+auto-PR-on-merge bot is intentionally **not** wired (that is a separate workflow-design decision);
+the flow above is the minimal manual `changeset` → `version` → tag → publish path.
 
 ### npm publishing authentication
 

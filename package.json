@@ -1,7 +1,7 @@
 {
   "name": "receipta",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Tamper-evident receipts for every AI decision. Ed25519-signed, hash-chained, offline-verifiable.",
   "license": "Apache-2.0",
   "type": "module",
@@ -34,9 +34,12 @@
     "docs:build": "vitepress build docs",
     "docs:dev": "vitepress dev docs",
     "verify:demo": "pnpm --filter @receipta/core build && node packages/core/scripts/verify-demo.mjs",
-    "example": "pnpm build && node examples/quickstart/run.mjs"
+    "example": "pnpm build && node examples/quickstart/run.mjs",
+    "changeset": "changeset",
+    "version": "changeset version"
   },
   "devDependencies": {
+    "@changesets/cli": "2.31.1",
     "@eslint/js": "^10.0.1",
     "@fontsource/ibm-plex-mono": "^5.2.7",
     "@fontsource/ibm-plex-sans": "^5.2.8",
