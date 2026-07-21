@@ -1,0 +1,32 @@
+# markdownlint-cli2 config (N1 — deterministic markdown lint gate).
+# Permissive initial set (BA5): enable default rules; disable only the two that clash with the
+# repo's legitimate tooling output. Rules can be tightened later; the gate existing is the
+# requirement. Globs are read from this file, so the npm scripts pass no explicit globs.
+config:
+  MD013: false # line-length — VitePress/keep-a-changelog legitimately use long lines.
+  MD033: false # inline-HTML — VitePress components and keep-a-changelog use <br>/<sub> etc.
+
+# Per-file overrides. CHANGELOG.md follows keep-a-changelog, which legitimately repeats section
+# headings ("Added"/"Changed"/"Fixed") under every version entry — MD024 flags that as duplicates,
+# but they are distinct per-version sections. Scope MD024 off for the changelog only.
+overrides:
+  - filter: ['CHANGELOG.md']
+    config:
+      MD024: false
+    combine: merge
+
+# What to lint. Scopes to tracked prose; excludes generated/tooling/ephemeral trees.
+globs:
+  - '**/*.md'
+
+# What to skip. node_modules/dist are build output (node_modules nests under packages/* in a
+# pnpm workspace, so the glob must be **/node_modules/**); thoughts/ is local-only (.gitignore'd);
+# .changeset/*.md are ephemeral fragments; .claude/.zcode are AI tooling prompt files (templated
+# prose, not user-facing docs) with their own conventions that linting would flag as noise.
+ignores:
+  - '**/node_modules/**'
+  - '**/dist/**'
+  - 'thoughts/**'
+  - '.changeset/**/*.md'
+  - '.claude/**'
+  - '.zcode/**'

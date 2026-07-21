@@ -45,14 +45,14 @@ officially representing the community in public spaces.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the
-maintainer responsible for enforcement at **1592163+nitishagar@users.noreply.github.com**.
+maintainer responsible for enforcement at **<1592163+nitishagar@users.noreply.github.com>**.
 
 All complaints will be reviewed and investigated promptly and fairly.
 
 ## Attribution
 
 This Code of Conduct is adapted from the [Contributor Covenant][homepage], version 2.1,
-available at https://www.contributor-covenant.org/version/2/1/code_of_conduct.html.
+available at <https://www.contributor-covenant.org/version/2/1/code_of_conduct.html>.
 
 [homepage]: https://www.contributor-covenant.org
 

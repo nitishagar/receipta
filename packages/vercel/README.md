@@ -65,7 +65,7 @@ into thinking content was captured when it wasn't.
 
 ## Docs
 
-Full documentation: **https://nitishagar.github.io/receipta/adapters/vercel**
+Full documentation: **<https://nitishagar.github.io/receipta/adapters/vercel>**
 
 ## License
 

@@ -96,7 +96,7 @@ npx receipta verify ./receipts.log.receipta --trust-root keys/
 
 On a valid chain:
 
-```
+```text
 ✓ valid: 42 receipt(s) verified.
 ```
 
