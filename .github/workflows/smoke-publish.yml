@@ -1,0 +1,64 @@
+# Smoke-publish (N2): after Publish succeeds on a v* tag, verify the published artifacts are
+# installable + importable from the npm registry (not a local tarball), so a publish that silently
+# ships a broken `files`/`exports` whitelist is caught. Runs via `workflow_run` so it has `main`
+# branch permissions (correct for a verification gate) and decouples from the publish runner.
+#
+# Tag-resolution (load-bearing): inside a `workflow_run` event, GITHUB_REF/GITHUB_REF_NAME resolve
+# to the DEFAULT BRANCH (main), NOT the tag that triggered the upstream workflow (GitHub docs
+# "Events that trigger workflows → workflow_run"). The tag is available ONLY via
+# `${{ github.event.workflow_run.head_branch }}`, which carries the upstream run's branch-or-tag.
+# `workflow_run` has no native `tags:` filter, so `branches: ['v*']` is the correct trigger filter
+# (it matches head_branch against the pattern).
+name: Smoke-publish
+
+on:
+  workflow_run:
+    workflows: [Publish]
+    types: [completed]
+    branches: ['v*'] # matches the upstream Publish run's head_branch (the v* tag)
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Resolve published version from the triggering tag
+        id: tag
+        # head_branch is the tag (e.g. 'v0.2.1'); strip the leading 'v' to get the npm version.
+        run: |
+          raw="${{ github.event.workflow_run.head_branch }}"
+          case "$raw" in
+            v*) version="${raw#v}" ;;
+            *)  echo "::error::upstream head_branch '$raw' is not a v-prefixed tag"; exit 1 ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Clean install + import (retry on npm propagation lag, BA3; fail loudly on exhaustion)
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          set -uo pipefail   # NOT -e: we manage exit codes explicitly so retry-exhaustion is loud
+          mkdir smoke && cd smoke
+          npm init -y >/dev/null
+          installed=0
+          for i in 1 2 3 4 5; do
+            if npm install \
+              "@receipta/core@$VERSION" "@receipta/openai@$VERSION" \
+              "@receipta/anthropic@$VERSION" "@receipta/vercel@$VERSION" \
+              "@receipta/cli@$VERSION" 2>install.err; then
+              installed=1
+              break
+            fi
+            echo "::warning::install attempt $i failed; npm propagation may lag. Retrying in 30s."
+            cat install.err >&2
+            sleep 30
+          done
+          if [ "$installed" -ne 1 ]; then
+            echo "::error::npm install failed after 5 attempts; version $VERSION is unreachable on the registry."
+            exit 1
+          fi
+          # All 5 packages are ESM ("type":"module", exports.import only). Use dynamic import(), not require().
+          # Pass the package name via env (PKG) so the node -e string needs no shell interpolation of $pkg.
+          for pkg in core openai anthropic vercel cli; do
+            PKG="$pkg" node --input-type=module -e "import('@receipta/'+process.env.PKG).then(m=>console.log(process.env.PKG+' ok')).catch(e=>{console.error(process.env.PKG+' FAIL',e);process.exit(1)})"
+          done
