@@ -35,7 +35,7 @@ jobs:
 
       - name: Dependency Review
         if: steps.check-graph.outputs.enabled == 'true'
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v5
         with:
           # Fail on high/critical vulnerabilities or license violations; warn otherwise.
           fail-on-severity: high
