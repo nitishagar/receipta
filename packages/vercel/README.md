@@ -17,19 +17,21 @@ npm install @receipta/vercel @receipta/core ai
 ## Usage (AI SDK v7)
 
 ```ts
-import { registerTelemetry } from "ai";
-import { receiptaTelemetry } from "@receipta/vercel";
-import { openStore, generateKeyPair } from "@receipta/core";
+import { registerTelemetry } from 'ai';
+import { receiptaTelemetry } from '@receipta/vercel';
+import { openStore, generateKeyPair } from '@receipta/core';
 
-const store = await openStore("./receipts.log.receipta");
+const store = await openStore('./receipts.log.receipta');
 const signer = generateKeyPair(); // in practice, load from env/KMS
 
-registerTelemetry(receiptaTelemetry({
-  store,
-  signer,
-  actor: { type: "agent", id: "my-agent" },
-  captureMode: "full",
-}));
+registerTelemetry(
+  receiptaTelemetry({
+    store,
+    signer,
+    actor: { type: 'agent', id: 'my-agent' },
+    captureMode: 'full',
+  }),
+);
 
 // every generateText/streamText now emits a receipt
 ```
@@ -37,8 +39,8 @@ registerTelemetry(receiptaTelemetry({
 ### AI SDK v6
 
 ```ts
-import { registerTelemetryIntegration } from "ai";
-import { receiptaTelemetryV6 } from "@receipta/vercel";
+import { registerTelemetryIntegration } from 'ai';
+import { receiptaTelemetryV6 } from '@receipta/vercel';
 
 registerTelemetryIntegration(receiptaTelemetryV6({ store, signer, actor }));
 ```

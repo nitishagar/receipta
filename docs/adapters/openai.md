@@ -18,23 +18,27 @@ Receipt emission is wrapped in try/catch — it never throws into your call.
 ## Usage
 
 ```ts
-import OpenAI from "openai";
-import { withReceipts } from "@receipta/openai";
-import { openStore, generateKeyPair } from "@receipta/core";
+import OpenAI from 'openai';
+import { withReceipts } from '@receipta/openai';
+import { openStore, generateKeyPair } from '@receipta/core';
 
-const store = await openStore("./receipts.log.receipta");
+const store = await openStore('./receipts.log.receipta');
 const signer = generateKeyPair();
 
-const client = withReceipts(OpenAI, { apiKey: process.env.OPENAI_API_KEY! }, {
-  store,
-  signer,
-  actor: { type: "service", id: "my-app" },
-  captureMode: "full", // or "metadata_only" to omit content
-});
+const client = withReceipts(
+  OpenAI,
+  { apiKey: process.env.OPENAI_API_KEY! },
+  {
+    store,
+    signer,
+    actor: { type: 'service', id: 'my-app' },
+    captureMode: 'full', // or "metadata_only" to omit content
+  },
+);
 
 const res = await client.chat.completions.create({
-  model: "gpt-4o",
-  messages: [{ role: "user", content: "Hello" }],
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'Hello' }],
 });
 ```
 

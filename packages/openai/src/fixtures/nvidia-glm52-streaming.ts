@@ -13,29 +13,29 @@
  *  - `reasoning_content` must survive into the assembled message (FAILS today: dropped).
  */
 export const nvidiaGlm52Streaming = {
-  name: "nvidia-glm52-streaming",
+  name: 'nvidia-glm52-streaming',
   streaming: true,
   /** Verbatim SSE bytes (data: lines + blank separators). */
   sseText: [
     'data: {"id":"chatcmpl-nvidia-1","object":"chat.completion.chunk","created":1720000000,"model":"z-ai/glm-5.2","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":"Thinking "},"usage":null,"finish_reason":null}]}',
-    "",
+    '',
     'data: {"id":"chatcmpl-nvidia-1","object":"chat.completion.chunk","created":1720000000,"model":"z-ai/glm-5.2","choices":[{"index":0,"delta":{"reasoning_content":"it through.","content":"Hello"},"usage":null,"finish_reason":null}]}',
-    "",
+    '',
     'data: {"id":"chatcmpl-nvidia-1","object":"chat.completion.chunk","created":1720000000,"model":"z-ai/glm-5.2","choices":[{"index":0,"delta":{"content":" world"},"usage":null,"finish_reason":null}]}',
-    "",
+    '',
     'data: {"id":"chatcmpl-nvidia-1","object":"chat.completion.chunk","created":1720000000,"model":"z-ai/glm-5.2","choices":[{"index":0,"delta":{},"usage":null,"finish_reason":"stop"}]}',
-    "",
+    '',
     'data: {"id":"chatcmpl-nvidia-1","object":"chat.completion.chunk","created":1720000000,"model":"z-ai/glm-5.2","choices":[],"usage":{"prompt_tokens":11,"completion_tokens":2,"total_tokens":13}}',
-    "",
-    "data: [DONE]",
-    "",
-  ].join("\n"),
-  headers: { "content-type": "text/event-stream", "nvcf-reqid": "r-nvidia-glm52-001" },
+    '',
+    'data: [DONE]',
+    '',
+  ].join('\n'),
+  headers: { 'content-type': 'text/event-stream', 'nvcf-reqid': 'r-nvidia-glm52-001' },
   expect: {
-    request_id: "r-nvidia-glm52-001",
+    request_id: 'r-nvidia-glm52-001',
     usage: { input_tokens: 11, output_tokens: 2 },
     hasReasoningContent: true,
-    reasoningContent: "Thinking it through.",
-    contentText: "Hello world",
+    reasoningContent: 'Thinking it through.',
+    contentText: 'Hello world',
   },
 } as const;

@@ -2,7 +2,7 @@
 version: 2
 updates:
   - package-ecosystem: npm
-    directory: "/"
+    directory: '/'
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
@@ -11,20 +11,20 @@ updates:
     groups:
       typescript:
         patterns:
-          - "typescript"
-          - "@types/*"
-          - "typescript-eslint"
+          - 'typescript'
+          - '@types/*'
+          - 'typescript-eslint'
       eslint:
         patterns:
-          - "eslint"
-          - "@eslint/js"
-          - "globals"
+          - 'eslint'
+          - '@eslint/js'
+          - 'globals'
       build:
         patterns:
-          - "vitepress"
-          - "vitest"
+          - 'vitepress'
+          - 'vitest'
   - package-ecosystem: github-actions
-    directory: "/"
+    directory: '/'
     schedule:
       interval: weekly
     labels:

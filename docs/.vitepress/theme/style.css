@@ -17,14 +17,14 @@
  */
 
 /* ---- IBM Plex Mono (display/code surfaces) — weights 400/500/700, latin ---- */
-@import "@fontsource/ibm-plex-mono/latin-400.css";
-@import "@fontsource/ibm-plex-mono/latin-500.css";
-@import "@fontsource/ibm-plex-mono/latin-700.css";
+@import '@fontsource/ibm-plex-mono/latin-400.css';
+@import '@fontsource/ibm-plex-mono/latin-500.css';
+@import '@fontsource/ibm-plex-mono/latin-700.css';
 
 /* ---- IBM Plex Sans (body) — weights 400/500/700, latin ---- */
-@import "@fontsource/ibm-plex-sans/latin-400.css";
-@import "@fontsource/ibm-plex-sans/latin-500.css";
-@import "@fontsource/ibm-plex-sans/latin-700.css";
+@import '@fontsource/ibm-plex-sans/latin-400.css';
+@import '@fontsource/ibm-plex-sans/latin-500.css';
+@import '@fontsource/ibm-plex-sans/latin-700.css';
 
 /* ---------------------------------------------------------------------------
  * Display surfaces use IBM Plex Mono (BA-5): headings, nav title, code, hero.
@@ -102,19 +102,19 @@ h6,
  * (we leave the syntax palette alone); the surrounding chrome — background,
  * border, copy button, lang label — reads monochrome, not indigo.
  * ------------------------------------------------------------------------- */
-.vp-doc div[class*="language-"],
+.vp-doc div[class*='language-'],
 .vp-block {
   border: var(--receipta-border-width) solid var(--receipta-c-border);
   border-radius: var(--receipta-radius-md);
   background-color: var(--receipta-c-bg-soft);
 }
 
-.vp-doc div[class*="language-"] button.copy {
+.vp-doc div[class*='language-'] button.copy {
   border-color: var(--receipta-c-border);
   background-color: var(--receipta-c-bg-weak);
 }
 
-.vp-doc div[class*="language-"] .lang {
+.vp-doc div[class*='language-'] .lang {
   color: var(--receipta-c-text-subtle);
 }
 

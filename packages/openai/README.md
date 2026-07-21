@@ -17,24 +17,28 @@ npm install @receipta/openai @receipta/core openai
 ## Usage
 
 ```ts
-import OpenAI from "openai";
-import { withReceipts } from "@receipta/openai";
-import { openStore, generateKeyPair } from "@receipta/core";
+import OpenAI from 'openai';
+import { withReceipts } from '@receipta/openai';
+import { openStore, generateKeyPair } from '@receipta/core';
 
-const store = await openStore("./receipts.log.receipta");
+const store = await openStore('./receipts.log.receipta');
 const signer = generateKeyPair(); // in practice, load from env/KMS
 
 // Use the wrapped client exactly as you would `new OpenAI(...)`.
-const client = withReceipts(OpenAI, { apiKey: process.env.OPENAI_API_KEY! }, {
-  store,
-  signer,
-  actor: { type: "service", id: "my-app" },
-  captureMode: "full", // or "metadata_only" to omit content
-});
+const client = withReceipts(
+  OpenAI,
+  { apiKey: process.env.OPENAI_API_KEY! },
+  {
+    store,
+    signer,
+    actor: { type: 'service', id: 'my-app' },
+    captureMode: 'full', // or "metadata_only" to omit content
+  },
+);
 
 const res = await client.chat.completions.create({
-  model: "gpt-4o",
-  messages: [{ role: "user", content: "Hello" }],
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'Hello' }],
 });
 ```
 
@@ -74,13 +78,17 @@ gateway uses a nonstandard header, pass the full list via the `provider` overrid
 copy of the assembler:
 
 ```ts
-const client = withReceipts(OpenAI, { apiKey, baseURL: "https://integrate.api.nvidia.com/v1" }, {
-  store,
-  signer,
-  actor: { type: "service", id: "my-app" },
-  // Override REPLACES the default list — include the headers you want checked, in priority order.
-  provider: { requestIdHeaders: ["my-gateway-req-id", "x-request-id"] },
-});
+const client = withReceipts(
+  OpenAI,
+  { apiKey, baseURL: 'https://integrate.api.nvidia.com/v1' },
+  {
+    store,
+    signer,
+    actor: { type: 'service', id: 'my-app' },
+    // Override REPLACES the default list — include the headers you want checked, in priority order.
+    provider: { requestIdHeaders: ['my-gateway-req-id', 'x-request-id'] },
+  },
+);
 ```
 
 **Streaming usage.** Whether a usage chunk is emitted at all is provider/model-dependent (e.g.
@@ -90,8 +98,8 @@ some NVIDIA NIM models omit it unless asked). To capture token usage on streamin
 
 ```ts
 await client.chat.completions.create({
-  model: "z-ai/glm-5.2",
-  messages: [{ role: "user", content: "Hello" }],
+  model: 'z-ai/glm-5.2',
+  messages: [{ role: 'user', content: 'Hello' }],
   stream: true,
   stream_options: { include_usage: true }, // opt in — the wrapper captures the usage chunk
 });

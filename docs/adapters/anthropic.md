@@ -15,23 +15,27 @@ The fetch layer is the version-stable single integration point.
 ## Usage
 
 ```ts
-import Anthropic from "@anthropic-ai/sdk";
-import { withReceipts } from "@receipta/anthropic";
-import { openStore, generateKeyPair } from "@receipta/core";
+import Anthropic from '@anthropic-ai/sdk';
+import { withReceipts } from '@receipta/anthropic';
+import { openStore, generateKeyPair } from '@receipta/core';
 
-const store = await openStore("./receipts.log.receipta");
+const store = await openStore('./receipts.log.receipta');
 const signer = generateKeyPair();
 
-const client = withReceipts(Anthropic, { apiKey: process.env.ANTHROPIC_API_KEY! }, {
-  store,
-  signer,
-  actor: { type: "service", id: "my-app" },
-});
+const client = withReceipts(
+  Anthropic,
+  { apiKey: process.env.ANTHROPIC_API_KEY! },
+  {
+    store,
+    signer,
+    actor: { type: 'service', id: 'my-app' },
+  },
+);
 
 const res = await client.messages.create({
-  model: "claude-3-5-sonnet-20241022",
+  model: 'claude-3-5-sonnet-20241022',
   max_tokens: 1024,
-  messages: [{ role: "user", content: "Hello" }],
+  messages: [{ role: 'user', content: 'Hello' }],
 });
 ```
 

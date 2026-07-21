@@ -30,16 +30,16 @@
 export function canonicalize(value: unknown): string {
   const out: string[] = [];
   serializeValue(value, out);
-  return out.join("");
+  return out.join('');
 }
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 
 function serializeValue(value: unknown, out: string[]): void {
   switch (typeof value) {
-    case "object":
+    case 'object':
       if (value === null) {
-        out.push("null");
+        out.push('null');
         return;
       }
       if (Array.isArray(value)) {
@@ -48,38 +48,36 @@ function serializeValue(value: unknown, out: string[]): void {
       }
       serializeObject(value as Record<string, Json>, out);
       return;
-    case "string":
+    case 'string':
       out.push(serializeString(value));
       return;
-    case "number":
+    case 'number':
       out.push(serializeNumber(value));
       return;
-    case "boolean":
-      out.push(value ? "true" : "false");
+    case 'boolean':
+      out.push(value ? 'true' : 'false');
       return;
     default:
       // undefined, bigint, symbol, function
-      throw new TypeError(
-        `canonicalize: value of type ${typeof value} has no JSON representation`,
-      );
+      throw new TypeError(`canonicalize: value of type ${typeof value} has no JSON representation`);
   }
 }
 
 /** RFC 8785 §3.2.2.3 — number serialization, delegating to ECMAScript with `-0` correction. */
 function serializeNumber(value: number): string {
   if (Number.isNaN(value)) {
-    throw new TypeError("canonicalize: NaN is not serializable (RFC 8785 §3.2.2.3)");
+    throw new TypeError('canonicalize: NaN is not serializable (RFC 8785 §3.2.2.3)');
   }
   if (!Number.isFinite(value)) {
     throw new TypeError(
-      `canonicalize: ${value > 0 ? "Infinity" : "-Infinity"} is not serializable (RFC 8785 §3.2.2.3)`,
+      `canonicalize: ${value > 0 ? 'Infinity' : '-Infinity'} is not serializable (RFC 8785 §3.2.2.3)`,
     );
   }
   // ECMAScript's number-to-string already matches RFC 8785 for the common cases (integers,
   // decimals, and the scientific form e.g. 1e21 → "1e+21"). The ONE divergence is -0:
   // `String(-0)` === "0", but RFC 8785 requires "-0".
   if (Object.is(value, -0)) {
-    return "-0";
+    return '-0';
   }
   return String(value);
 }
@@ -98,7 +96,7 @@ function serializeString(value: string): string {
       continue;
     }
     if (cp === 0x5c) {
-      out += "\\\\";
+      out += '\\\\';
       continue;
     }
     if (cp < 0x20) {
@@ -115,12 +113,12 @@ function serializeString(value: string): string {
         out += value[i]! + value[i + 1]!;
         i++;
       } else {
-        out += "\\u" + hex4(cp);
+        out += '\\u' + hex4(cp);
       }
       continue;
     }
     if (cp >= 0xdc00 && cp <= 0xdfff) {
-      out += "\\u" + hex4(cp);
+      out += '\\u' + hex4(cp);
       continue;
     }
     out += value[i]!;
@@ -133,22 +131,22 @@ function serializeString(value: string): string {
 function controlEscape(cp: number): string {
   switch (cp) {
     case 0x08:
-      return "\\b";
+      return '\\b';
     case 0x09:
-      return "\\t";
+      return '\\t';
     case 0x0a:
-      return "\\n";
+      return '\\n';
     case 0x0c:
-      return "\\f";
+      return '\\f';
     case 0x0d:
-      return "\\r";
+      return '\\r';
     default:
-      return "\\u" + hex4(cp);
+      return '\\u' + hex4(cp);
   }
 }
 
 function hex4(cp: number): string {
-  return cp.toString(16).padStart(4, "0").toLowerCase();
+  return cp.toString(16).padStart(4, '0').toLowerCase();
 }
 
 /** RFC 8785 §3.2.3 — object members sorted by UTF-16 code unit of the member name. */
@@ -158,32 +156,32 @@ function serializeObject(obj: Record<string, Json>, out: string[]): void {
   // first stripping them out.
   const keys = Object.keys(obj).filter((k) => obj[k] !== undefined);
   if (keys.length === 0) {
-    out.push("{}");
+    out.push('{}');
     return;
   }
   keys.sort(compareKeysUtf16);
-  out.push("{");
+  out.push('{');
   for (let i = 0; i < keys.length; i++) {
     const key = keys[i]!;
-    if (i > 0) out.push(",");
+    if (i > 0) out.push(',');
     out.push(serializeString(key));
-    out.push(":");
+    out.push(':');
     serializeValue(obj[key], out);
   }
-  out.push("}");
+  out.push('}');
 }
 
 function serializeArray(arr: Json[], out: string[]): void {
   if (arr.length === 0) {
-    out.push("[]");
+    out.push('[]');
     return;
   }
-  out.push("[");
+  out.push('[');
   for (let i = 0; i < arr.length; i++) {
-    if (i > 0) out.push(",");
+    if (i > 0) out.push(',');
     serializeValue(arr[i], out);
   }
-  out.push("]");
+  out.push(']');
 }
 
 /**

@@ -5,24 +5,24 @@
  * reason is noted in comments and surfaced in the docs schema reference). The signed bytes are the
  * RFC 8785 canonicalization of the receipt MINUS the signature envelope — see `canonicalForSigning`.
  */
-import { canonicalize } from "./canon.js";
-import { sha256, toHex } from "./crypto.js";
+import { canonicalize } from './canon.js';
+import { sha256, toHex } from './crypto.js';
 
 /** Every receipt self-identifies its schema version (PLAN D7, S1.8). */
-export const SCHEMA_VERSION = "receipta.v0" as const;
+export const SCHEMA_VERSION = 'receipta.v0' as const;
 export type SchemaVersion = typeof SCHEMA_VERSION;
 
 /** v0.1 signature suite. The field exists to permit ML-DSA / FIPS-provider suites later (S1.8). */
-export type SignatureSuite = "ed25519" | (string & {}); // open for future suites
+export type SignatureSuite = 'ed25519' | (string & {}); // open for future suites
 
 /**
  * Trust level of a timestamp/anchor (S1.7). v0.1 only ever populates `local_asserted`; the enum
  * is complete so a receipt is never silently presented as more trustworthy than it is.
  */
-export type TrustLevel = "local_asserted" | "rfc3161" | "transparency_log" | "witness";
+export type TrustLevel = 'local_asserted' | 'rfc3161' | 'transparency_log' | 'witness';
 
 /** What was captured for this call (S1.3). A verifier must not be misled about content presence. */
-export type ContentCaptureMode = "full" | "metadata_only";
+export type ContentCaptureMode = 'full' | 'metadata_only';
 
 /** ISO-8601 UTC millisecond timestamp carrying its own trust level (S1.7). */
 export interface ReceiptTimestamp {
@@ -34,7 +34,7 @@ export interface ReceiptTimestamp {
 /** Who/what made the decision — distinct from the signing key (S3.2). */
 export interface Actor {
   /** "human" | "service" | "agent" — the class of actor. */
-  type: "human" | "service" | "agent";
+  type: 'human' | 'service' | 'agent';
   /** Stable identifier (user id, service name, agent id). */
   id: string;
   /** Optional human-readable label. */
@@ -76,7 +76,7 @@ export interface Usage {
  * release can add RFC 3161 / transparency-log / witness anchors without a schema break.
  */
 export interface Anchor {
-  type: "rfc3161" | "transparency_log" | "witness";
+  type: 'rfc3161' | 'transparency_log' | 'witness';
   trust_level: TrustLevel;
   /** Opaque, suite-specific anchor data (a TSA token, an inclusion proof, a witness co-sig). */
   data: JsonValue;
@@ -103,7 +103,7 @@ export interface ReceiptBody {
   suite: SignatureSuite;
   chain_id: string;
   seq: number;
-  /** Hex of sha256(canon(prev receipt body)) — all-zero hex for seq 0 (the chain root). */
+  /** Hex of sha256(canon(prev receipt body)) — all-zero hex for the first receipt (seq 1). */
   prev_hash: string;
   key_id: string;
   timestamp: ReceiptTimestamp;
@@ -113,7 +113,7 @@ export interface ReceiptBody {
   request_id?: string;
   attempt_index?: number;
   /** "success" | "error" | "retry" — was the call successful, errored, or a retry attempt (S2.2). */
-  outcome: "success" | "error" | "retry";
+  outcome: 'success' | 'error' | 'retry';
   content_captured: boolean;
   capture_mode: ContentCaptureMode;
   content?: CapturedContent;
@@ -132,7 +132,7 @@ export interface Receipt {
   signature: string;
 }
 
-/** The all-zero hash used as `prev_hash` for the chain root (seq 0). */
+/** The all-zero hash used as `prev_hash` for the first receipt (seq 1 — the virtual chain root). */
 export const ZERO_HASH = toHex(new Uint8Array(32));
 
 /**
@@ -145,5 +145,5 @@ export function canonicalForSigning(body: ReceiptBody): string {
 
 /** SHA-256 (hex) of a receipt body's canonical bytes — used to compute the next `prev_hash`. */
 export function receiptBodyHash(body: ReceiptBody): string {
-  return toHex(sha256(Buffer.from(canonicalForSigning(body), "utf8")));
+  return toHex(sha256(Buffer.from(canonicalForSigning(body), 'utf8')));
 }

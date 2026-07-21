@@ -4,20 +4,20 @@
  * G1.3/G3.1 honest-absence: `usage === undefined` (never fabricated to 0/0).
  */
 export const openaiNoUsageStreaming = {
-  name: "openai-no-usage-streaming",
+  name: 'openai-no-usage-streaming',
   streaming: true,
   sseText: [
     'data: {"id":"chatcmpl-nou-1","object":"chat.completion.chunk","created":1720000000,"model":"gpt-4o","choices":[{"index":0,"delta":{"role":"assistant","content":"ok"},"finish_reason":null}]}',
-    "",
+    '',
     'data: {"id":"chatcmpl-nou-1","object":"chat.completion.chunk","created":1720000000,"model":"gpt-4o","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}',
-    "",
-    "data: [DONE]",
-    "",
-  ].join("\n"),
-  headers: { "content-type": "text/event-stream", "x-request-id": "req-nou-004" },
+    '',
+    'data: [DONE]',
+    '',
+  ].join('\n'),
+  headers: { 'content-type': 'text/event-stream', 'x-request-id': 'req-nou-004' },
   expect: {
-    request_id: "req-nou-004",
+    request_id: 'req-nou-004',
     usageUndefined: true,
-    contentText: "ok",
+    contentText: 'ok',
   },
 } as const;

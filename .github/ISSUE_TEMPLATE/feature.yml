@@ -1,0 +1,36 @@
+name: Feature request
+description: Suggest a new capability or improvement
+labels: ['enhancement']
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: The use case or pain point. Frame the problem first, not the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would help?
+      description: The capability you wish receipta had. If you have considered alternatives, note them.
+    validations:
+      required: true
+  - type: dropdown
+    id: package
+    attributes:
+      label: Affected package
+      options:
+        - '@receipta/core'
+        - '@receipta/cli'
+        - '@receipta/openai'
+        - '@receipta/anthropic'
+        - '@receipta/vercel'
+        - docs / other
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Anything else relevant — links, prior art, constraints (e.g. must not add a runtime dep to core).

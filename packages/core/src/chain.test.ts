@@ -1,14 +1,14 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { rm, mkdir, readFile, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
-import * as path from "node:path";
-import { openStore, appendReceipt, appendBody, type ReceiptStore } from "./store.js";
-import { buildReceipt, verifyChain, keyPairSigner } from "./chain.js";
-import { loadTrustRoot, resolverFromTrustRoot, writeTrustedKey } from "./trust.js";
-import { generateKeyPair, exportPublicKey, sign } from "./crypto.js";
-import { type Receipt, type ReceiptBody } from "./schema.js";
+import { describe, it, expect, beforeEach } from 'vitest';
+import { rm, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import * as path from 'node:path';
+import { openStore, appendReceipt, appendBody, type ReceiptStore } from './store.js';
+import { buildReceipt, verifyChain, keyPairSigner } from './chain.js';
+import { loadTrustRoot, resolverFromTrustRoot, writeTrustedKey } from './trust.js';
+import { generateKeyPair, exportPublicKey, sign } from './crypto.js';
+import { type Receipt, type ReceiptBody } from './schema.js';
 
-const TMP = path.join(process.cwd(), ".vitest-tmp", "chain");
+const TMP = path.join(process.cwd(), '.vitest-tmp', 'chain');
 
 async function freshDir(name: string): Promise<string> {
   const dir = path.join(TMP, name);
@@ -19,7 +19,7 @@ async function freshDir(name: string): Promise<string> {
 
 async function freshStore(name: string): Promise<{ store: ReceiptStore; dir: string }> {
   const dir = await freshDir(name);
-  const store = await openStore(path.join(dir, "log.receipta"));
+  const store = await openStore(path.join(dir, 'log.receipta'));
   return { store, dir };
 }
 
@@ -29,29 +29,33 @@ function mkBody(overrides: {
   prevHash: string;
   chainId: string;
   keyId: string;
-  outcome?: ReceiptBody["outcome"];
-}): Omit<ReceiptBody, "schema_version" | "suite"> {
+  outcome?: ReceiptBody['outcome'];
+}): Omit<ReceiptBody, 'schema_version' | 'suite'> {
   return {
     chain_id: overrides.chainId,
     seq: overrides.seq,
     prev_hash: overrides.prevHash,
     key_id: overrides.keyId,
-    timestamp: { iso8601_ms: "2026-07-10T08:06:00.000Z", trust_level: "local_asserted" },
-    actor: { type: "service", id: "test-actor" },
-    provider: "openai",
-    model: "gpt-test",
-    request_id: "req-" + overrides.seq,
+    timestamp: { iso8601_ms: '2026-07-10T08:06:00.000Z', trust_level: 'local_asserted' },
+    actor: { type: 'service', id: 'test-actor' },
+    provider: 'openai',
+    model: 'gpt-test',
+    request_id: 'req-' + overrides.seq,
     attempt_index: 0,
-    outcome: overrides.outcome ?? "success",
+    outcome: overrides.outcome ?? 'success',
     content_captured: true,
-    capture_mode: "full",
-    content: { request: { prompt: "hello" }, response: { text: "world" } },
+    capture_mode: 'full',
+    content: { request: { prompt: 'hello' }, response: { text: 'world' } },
     usage: { input_tokens: 5, output_tokens: 3 },
   };
 }
 
 /** Append a sequence of valid receipts to a store and return them. */
-async function appendN(store: ReceiptStore, kp: ReturnType<typeof generateKeyPair>, n: number): Promise<Receipt[]> {
+async function appendN(
+  store: ReceiptStore,
+  kp: ReturnType<typeof generateKeyPair>,
+  n: number,
+): Promise<Receipt[]> {
   const signer = keyPairSigner(kp);
   const out: Receipt[] = [];
   for (let i = 0; i < n; i++) {
@@ -74,50 +78,50 @@ async function appendN(store: ReceiptStore, kp: ReturnType<typeof generateKeyPai
   return out;
 }
 
-describe("store + chain — valid chain verifies", () => {
+describe('store + chain — valid chain verifies', () => {
   let kp: ReturnType<typeof generateKeyPair>;
   let keyDir: string;
 
   beforeEach(async () => {
     kp = generateKeyPair();
-    keyDir = path.join(TMP, "keys-" + Math.random().toString(36).slice(2));
+    keyDir = path.join(TMP, 'keys-' + Math.random().toString(36).slice(2));
     await writeTrustedKey(keyDir, kp.keyId, exportPublicKey(kp.publicKey));
   });
 
-  it("appends receipts and verifies the full chain (S1.5)", async () => {
-    const { store, dir } = await freshStore("valid-chain");
+  it('appends receipts and verifies the full chain (S1.5)', async () => {
+    const { store, dir } = await freshStore('valid-chain');
     await appendN(store, kp, 5);
     await store.close();
 
     const root = await loadTrustRoot(keyDir);
-    const report = await verifyChain(path.join(dir, "log.receipta"), resolverFromTrustRoot(root));
+    const report = await verifyChain(path.join(dir, 'log.receipta'), resolverFromTrustRoot(root));
 
     expect(report.ok).toBe(true);
     expect(report.verifiedCount).toBe(5);
     expect(report.firstDivergence).toBeNull();
   });
 
-  it("an empty store (no receipts) does not verify as ok", async () => {
-    const { store, dir } = await freshStore("empty");
+  it('an empty store (no receipts) does not verify as ok', async () => {
+    const { store, dir } = await freshStore('empty');
     await store.close();
     const root = await loadTrustRoot(keyDir);
-    const report = await verifyChain(path.join(dir, "log.receipta"), resolverFromTrustRoot(root));
+    const report = await verifyChain(path.join(dir, 'log.receipta'), resolverFromTrustRoot(root));
     expect(report.ok).toBe(false); // no receipts → not "ok" (chain has no signed content)
   });
 });
 
-describe("chain — tamper detection names the first divergence (S1.5)", () => {
+describe('chain — tamper detection names the first divergence (S1.5)', () => {
   let kp: ReturnType<typeof generateKeyPair>;
   let keyDir: string;
 
   beforeEach(async () => {
     kp = generateKeyPair();
-    keyDir = path.join(TMP, "keys-" + Math.random().toString(36).slice(2));
+    keyDir = path.join(TMP, 'keys-' + Math.random().toString(36).slice(2));
     await writeTrustedKey(keyDir, kp.keyId, exportPublicKey(kp.publicKey));
   });
 
   async function buildChain(dir: string, n: number): Promise<Receipt[]> {
-    const store = await openStore(path.join(dir, "log.receipta"));
+    const store = await openStore(path.join(dir, 'log.receipta'));
     const receipts = await appendN(store, kp, n);
     await store.close();
     return receipts;
@@ -125,10 +129,10 @@ describe("chain — tamper detection names the first divergence (S1.5)", () => {
 
   /** Rewrite the on-disk log from an edited list of receipts (for tamper tests). */
   async function rewriteLog(dir: string, receipts: Receipt[]): Promise<void> {
-    const logPath = path.join(dir, "log.receipta");
-    const { canonicalize } = await import("./canon.js");
+    const logPath = path.join(dir, 'log.receipta');
+    const { canonicalize } = await import('./canon.js');
     const frames = receipts.map((r) => {
-      const bytes = Buffer.from(canonicalize(r as unknown as Record<string, unknown>), "utf8");
+      const bytes = Buffer.from(canonicalize(r as unknown as Record<string, unknown>), 'utf8');
       const frame = Buffer.alloc(4 + bytes.length + 1);
       frame.writeUInt32BE(bytes.length, 0);
       bytes.copy(frame, 4);
@@ -140,25 +144,25 @@ describe("chain — tamper detection names the first divergence (S1.5)", () => {
 
   async function verify(dir: string) {
     const root = await loadTrustRoot(keyDir);
-    return verifyChain(path.join(dir, "log.receipta"), resolverFromTrustRoot(root));
+    return verifyChain(path.join(dir, 'log.receipta'), resolverFromTrustRoot(root));
   }
 
-  it("mutation of a receipt field is detected and names the field (S1.5)", async () => {
-    const dir = await freshDir("mutate");
+  it('mutation of a receipt field is detected and names the field (S1.5)', async () => {
+    const dir = await freshDir('mutate');
     const receipts = await buildChain(dir, 3);
     // Mutate the model on receipt #2. This changes its signed bytes → signature now invalid.
-    receipts[1]!.body.model = "tampered-model";
+    receipts[1]!.body.model = 'tampered-model';
     await rewriteLog(dir, receipts);
 
     const report = await verify(dir);
     expect(report.ok).toBe(false);
-    expect(report.firstDivergence?.kind).toBe("tamper");
+    expect(report.firstDivergence?.kind).toBe('tamper');
     expect(report.firstDivergence?.receiptSeq).toBe(2);
     expect(report.firstDivergence?.field).toMatch(/signature|model/);
   });
 
-  it("deletion of a receipt is detected via seq/prev_hash gap (S1.5)", async () => {
-    const dir = await freshDir("delete");
+  it('deletion of a receipt is detected via seq/prev_hash gap (S1.5)', async () => {
+    const dir = await freshDir('delete');
     const receipts = await buildChain(dir, 4);
     // Delete receipt #2 (index 1). Now #3's prev_hash points at the deleted one's hash.
     const tampered = [receipts[0]!, receipts[2]!, receipts[3]!];
@@ -166,12 +170,12 @@ describe("chain — tamper detection names the first divergence (S1.5)", () => {
 
     const report = await verify(dir);
     expect(report.ok).toBe(false);
-    expect(report.firstDivergence?.kind).toBe("tamper");
+    expect(report.firstDivergence?.kind).toBe('tamper');
     expect(report.firstDivergence?.receiptSeq).toBe(3); // seq 3 follows seq 1 — gap detected
   });
 
-  it("reordering is detected via prev_hash mismatch and names the receipt + field (S1.5)", async () => {
-    const dir = await freshDir("reorder");
+  it('reordering is detected via prev_hash mismatch and names the receipt + field (S1.5)', async () => {
+    const dir = await freshDir('reorder');
     const receipts = await buildChain(dir, 3);
     // Swap #2 and #3 (indices 1, 2). The receipt now at index 1 is the old #3; its prev_hash
     // still points at #1's hash but its seq (3) ≠ expected (2). The seq check fires first.
@@ -180,14 +184,14 @@ describe("chain — tamper detection names the first divergence (S1.5)", () => {
 
     const report = await verify(dir);
     expect(report.ok).toBe(false);
-    expect(report.firstDivergence?.kind).toBe("tamper");
+    expect(report.firstDivergence?.kind).toBe('tamper');
     // S1.5 requires the FIRST divergence to be named precisely: the offending receipt + field.
     expect(report.firstDivergence?.receiptSeq).toBe(3); // old #3 landed at position 2
-    expect(report.firstDivergence?.field).toBe("seq"); // seq 3 ≠ expected 2
+    expect(report.firstDivergence?.field).toBe('seq'); // seq 3 ≠ expected 2
   });
 
-  it("insertion is detected via seq mismatch and names the receipt + field (S1.5)", async () => {
-    const dir = await freshDir("insert");
+  it('insertion is detected via seq mismatch and names the receipt + field (S1.5)', async () => {
+    const dir = await freshDir('insert');
     const receipts = await buildChain(dir, 2);
     // Duplicate receipt #2 (index 1) — insert it again. seq 2 appears twice; the verifier sees
     // seq 2 where it expected seq 3.
@@ -196,35 +200,35 @@ describe("chain — tamper detection names the first divergence (S1.5)", () => {
 
     const report = await verify(dir);
     expect(report.ok).toBe(false);
-    expect(report.firstDivergence?.kind).toBe("tamper");
+    expect(report.firstDivergence?.kind).toBe('tamper');
     // S1.5 requires the FIRST divergence to be named precisely: the offending receipt + field.
     expect(report.firstDivergence?.receiptSeq).toBe(2); // duplicate seq 2 where 3 was expected
-    expect(report.firstDivergence?.field).toBe("seq");
+    expect(report.firstDivergence?.field).toBe('seq');
   });
 });
 
-describe("chain — schema/suite/critical-extension rejection (S1.8)", () => {
+describe('chain — schema/suite/critical-extension rejection (S1.8)', () => {
   let kp: ReturnType<typeof generateKeyPair>;
   let keyDir: string;
 
   beforeEach(async () => {
     kp = generateKeyPair();
-    keyDir = path.join(TMP, "keys-s18-" + Math.random().toString(36).slice(2));
+    keyDir = path.join(TMP, 'keys-s18-' + Math.random().toString(36).slice(2));
     await writeTrustedKey(keyDir, kp.keyId, exportPublicKey(kp.publicKey));
   });
 
   async function buildChain(dir: string, n: number): Promise<Receipt[]> {
-    const store = await openStore(path.join(dir, "log.receipta"));
+    const store = await openStore(path.join(dir, 'log.receipta'));
     const receipts = await appendN(store, kp, n);
     await store.close();
     return receipts;
   }
 
   async function rewriteLog(dir: string, receipts: Receipt[]): Promise<void> {
-    const logPath = path.join(dir, "log.receipta");
-    const { canonicalize } = await import("./canon.js");
+    const logPath = path.join(dir, 'log.receipta');
+    const { canonicalize } = await import('./canon.js');
     const frames = receipts.map((r) => {
-      const bytes = Buffer.from(canonicalize(r as unknown as Record<string, unknown>), "utf8");
+      const bytes = Buffer.from(canonicalize(r as unknown as Record<string, unknown>), 'utf8');
       const frame = Buffer.alloc(4 + bytes.length + 1);
       frame.writeUInt32BE(bytes.length, 0);
       bytes.copy(frame, 4);
@@ -236,54 +240,54 @@ describe("chain — schema/suite/critical-extension rejection (S1.8)", () => {
 
   async function verify(dir: string) {
     const root = await loadTrustRoot(keyDir);
-    return verifyChain(path.join(dir, "log.receipta"), resolverFromTrustRoot(root));
+    return verifyChain(path.join(dir, 'log.receipta'), resolverFromTrustRoot(root));
   }
 
-  it("rejects an unknown schema_version and names the field (S1.8)", async () => {
-    const dir = await freshDir("badschema");
+  it('rejects an unknown schema_version and names the field (S1.8)', async () => {
+    const dir = await freshDir('badschema');
     const receipts = await buildChain(dir, 2);
     // Rewrite receipt #1's schema_version to a future/unknown value. The signature still covers
     // the ORIGINAL canonical body, so re-signing is not needed to trip the schema_version check
     // (it runs before signature verification).
-    receipts[0]!.body.schema_version = "receipta.v999" as ReceiptBody["schema_version"];
+    receipts[0]!.body.schema_version = 'receipta.v999' as ReceiptBody['schema_version'];
     await rewriteLog(dir, receipts);
 
     const report = await verify(dir);
     expect(report.ok).toBe(false);
-    expect(report.firstDivergence?.kind).toBe("tamper");
-    expect(report.firstDivergence?.field).toBe("schema_version");
+    expect(report.firstDivergence?.kind).toBe('tamper');
+    expect(report.firstDivergence?.field).toBe('schema_version');
     expect(report.firstDivergence?.receiptSeq).toBe(1);
   });
 
-  it("rejects an unknown signature suite and names the field (S1.8)", async () => {
-    const dir = await freshDir("badsuite");
+  it('rejects an unknown signature suite and names the field (S1.8)', async () => {
+    const dir = await freshDir('badsuite');
     const receipts = await buildChain(dir, 2);
-    receipts[0]!.body.suite = "rsa-2048";
+    receipts[0]!.body.suite = 'rsa-2048';
     await rewriteLog(dir, receipts);
 
     const report = await verify(dir);
     expect(report.ok).toBe(false);
-    expect(report.firstDivergence?.kind).toBe("tamper");
-    expect(report.firstDivergence?.field).toBe("suite");
+    expect(report.firstDivergence?.kind).toBe('tamper');
+    expect(report.firstDivergence?.field).toBe('suite');
     expect(report.firstDivergence?.receiptSeq).toBe(1);
   });
 
-  it("rejects an unknown CRITICAL extension (S1.8 — must fail, not be silently ignored)", async () => {
-    const dir = await freshDir("critext");
+  it('rejects an unknown CRITICAL extension (S1.8 — must fail, not be silently ignored)', async () => {
+    const dir = await freshDir('critext');
     const receipts = await buildChain(dir, 2);
     // Add a critical extension the v0.1 verifier does not recognize. Per S1.8 this MUST fail.
-    receipts[1]!.body.extensions = { "future-anchor-proof": { critical: true, value: "deadbeef" } };
+    receipts[1]!.body.extensions = { 'future-anchor-proof': { critical: true, value: 'deadbeef' } };
     await rewriteLog(dir, receipts);
 
     const report = await verify(dir);
     expect(report.ok).toBe(false);
-    expect(report.firstDivergence?.kind).toBe("tamper");
-    expect(report.firstDivergence?.field).toBe("extensions.future-anchor-proof");
+    expect(report.firstDivergence?.kind).toBe('tamper');
+    expect(report.firstDivergence?.field).toBe('extensions.future-anchor-proof');
     expect(report.firstDivergence?.receiptSeq).toBe(2);
   });
 
-  it("ignores a non-critical unknown extension (forward compat, S1.8)", async () => {
-    const dir = await freshDir("noncritext");
+  it('ignores a non-critical unknown extension (forward compat, S1.8)', async () => {
+    const dir = await freshDir('noncritext');
     const receipts = await buildChain(dir, 2);
     // A non-critical extension must NOT break verification — but adding it changes the signed
     // bytes, so the signature will no longer verify. To isolate the *extension* semantics we
@@ -297,7 +301,7 @@ describe("chain — schema/suite/critical-extension rejection (S1.8)", () => {
     });
     // Re-emit receipt #2 WITH a non-critical extension as part of its signed body, re-signing so
     // the signature matches the new canonical bytes. The prev_hash must link onto #1's body hash.
-    const { receiptBodyHash } = await import("./schema.js");
+    const { receiptBodyHash } = await import('./schema.js');
     const truePrev = receiptBodyHash(receipts[0]!.body);
     const rebuilt2 = buildReceipt({
       prevHash: truePrev,
@@ -307,8 +311,8 @@ describe("chain — schema/suite/critical-extension rejection (S1.8)", () => {
       body: {
         ...base,
         timestamp: receipts[1]!.body.timestamp,
-        extensions: { "future-hint": { critical: false, value: "ok" } },
-      } as Omit<ReceiptBody, "schema_version" | "suite">,
+        extensions: { 'future-hint': { critical: false, value: 'ok' } },
+      } as Omit<ReceiptBody, 'schema_version' | 'suite'>,
     });
     await rewriteLog(dir, [receipts[0]!, rebuilt2]);
 
@@ -320,45 +324,45 @@ describe("chain — schema/suite/critical-extension rejection (S1.8)", () => {
     expect(report.firstDivergence).toBeNull();
   });
 
-  it("detects a chain_id change mid-chain and names the field", async () => {
-    const dir = await freshDir("chainidmismatch");
+  it('detects a chain_id change mid-chain and names the field', async () => {
+    const dir = await freshDir('chainidmismatch');
     const receipts = await buildChain(dir, 3);
     // Tamper receipt #2's chain_id to a foreign value. chain_id check (chain.ts) fires.
-    receipts[1]!.body.chain_id = "00000000-0000-0000-0000-000000000000";
+    receipts[1]!.body.chain_id = '00000000-0000-0000-0000-000000000000';
     await rewriteLog(dir, receipts);
 
     const report = await verify(dir);
     expect(report.ok).toBe(false);
-    expect(report.firstDivergence?.kind).toBe("tamper");
-    expect(report.firstDivergence?.field).toBe("chain_id");
+    expect(report.firstDivergence?.kind).toBe('tamper');
+    expect(report.firstDivergence?.field).toBe('chain_id');
   });
 });
 
-describe("chain — torn tail vs tamper (S2.4)", () => {
+describe('chain — torn tail vs tamper (S2.4)', () => {
   let kp: ReturnType<typeof generateKeyPair>;
   let keyDir: string;
 
   beforeEach(async () => {
     kp = generateKeyPair();
-    keyDir = path.join(TMP, "keys-" + Math.random().toString(36).slice(2));
+    keyDir = path.join(TMP, 'keys-' + Math.random().toString(36).slice(2));
     await writeTrustedKey(keyDir, kp.keyId, exportPublicKey(kp.publicKey));
   });
 
-  it("a truncated FINAL record is recoverable-incomplete, not tamper (S2.4)", async () => {
-    const dir = await freshDir("torntail");
+  it('a truncated FINAL record is recoverable-incomplete, not tamper (S2.4)', async () => {
+    const dir = await freshDir('torntail');
     const receipts = await (async () => {
-      const store = await openStore(path.join(dir, "log.receipta"));
+      const store = await openStore(path.join(dir, 'log.receipta'));
       const r = await appendN(store, kp, 3);
       await store.close();
       return r;
     })();
 
     // Truncate the last record's bytes on disk (simulate a torn write / crash before rename).
-    const logPath = path.join(dir, "log.receipta");
+    const logPath = path.join(dir, 'log.receipta');
     const full = await readFile(logPath);
     const lastReceiptBytes = Buffer.from(
       JSON.stringify(receipts[2] as unknown as Record<string, unknown>),
-      "utf8",
+      'utf8',
     );
     // Find where the last record starts: search backward for the last full frame.
     const lastFrameStart = full.length - (4 + lastReceiptBytes.length + 1);
@@ -369,20 +373,20 @@ describe("chain — torn tail vs tamper (S2.4)", () => {
     const root = await loadTrustRoot(keyDir);
     const report = await verifyChain(logPath, resolverFromTrustRoot(root));
     expect(report.ok).toBe(false);
-    expect(report.firstDivergence?.kind).toBe("recoverable-incomplete");
+    expect(report.firstDivergence?.kind).toBe('recoverable-incomplete');
     expect(report.verifiedCount).toBe(2); // the first two receipts still verify
   });
 
-  it("a malformed record in the MIDDLE is tamper (S2.4)", async () => {
-    const dir = await freshDir("midmalformed");
+  it('a malformed record in the MIDDLE is tamper (S2.4)', async () => {
+    const dir = await freshDir('midmalformed');
     await (async () => {
-      const store = await openStore(path.join(dir, "log.receipta"));
+      const store = await openStore(path.join(dir, 'log.receipta'));
       await appendN(store, kp, 3);
       await store.close();
     })();
 
     // Corrupt receipt #2 (middle): overwrite its bytes with invalid JSON but keep the frame.
-    const logPath = path.join(dir, "log.receipta");
+    const logPath = path.join(dir, 'log.receipta');
     const full = await readFile(logPath);
     // Locate record index 1 (the middle one) by walking frames.
     let offset = 0;
@@ -404,28 +408,28 @@ describe("chain — torn tail vs tamper (S2.4)", () => {
     const root = await loadTrustRoot(keyDir);
     const report = await verifyChain(logPath, resolverFromTrustRoot(root));
     expect(report.ok).toBe(false);
-    expect(report.firstDivergence?.kind).toBe("tamper");
+    expect(report.firstDivergence?.kind).toBe('tamper');
   });
 });
 
-describe("chain — concurrency (S2.3)", () => {
-  it("100 concurrent appends produce a valid linear chain with no lost updates (D6)", async () => {
+describe('chain — concurrency (S2.3)', () => {
+  it('100 concurrent appends produce a valid linear chain with no lost updates (D6)', async () => {
     const kp = generateKeyPair();
-    const keyDir = path.join(TMP, "keys-concurrency-" + Math.random().toString(36).slice(2));
+    const keyDir = path.join(TMP, 'keys-concurrency-' + Math.random().toString(36).slice(2));
     await writeTrustedKey(keyDir, kp.keyId, exportPublicKey(kp.publicKey));
-    const { store, dir } = await freshStore("concurrency");
+    const { store, dir } = await freshStore('concurrency');
 
     // Fire 100 appends concurrently. Without the mutex, these would interleave prev_hash reads
     // and lose updates. With the mutex (D6), the read-tip → build → append critical section in
     // `appendBody` is serialized, so each receipt chains to the correct predecessor.
     const signer = {
       keyId: kp.keyId,
-      sign: (canon: string) => sign(Buffer.from(canon, "utf8"), kp.privateKey),
+      sign: (canon: string) => sign(Buffer.from(canon, 'utf8'), kp.privateKey),
     };
     const tasks = Array.from({ length: 100 }, () =>
       appendBody(
         store,
-        mkBody({ seq: 0, prevHash: "", chainId: store.meta.chain_id, keyId: kp.keyId }),
+        mkBody({ seq: 0, prevHash: '', chainId: store.meta.chain_id, keyId: kp.keyId }),
         signer,
       ).then((r) => r.body.seq),
     );
@@ -433,11 +437,13 @@ describe("chain — concurrency (S2.3)", () => {
     await store.close();
 
     // Every append returned a distinct sequence number 1..100 — no lost updates, no duplicates.
-    expect(returnedSeqs.sort((a, b) => a - b)).toEqual(Array.from({ length: 100 }, (_, i) => i + 1));
+    expect(returnedSeqs.sort((a, b) => a - b)).toEqual(
+      Array.from({ length: 100 }, (_, i) => i + 1),
+    );
 
     // The on-disk chain verifies end-to-end: 100 receipts, valid signatures, continuous linkage.
     const root = await loadTrustRoot(keyDir);
-    const report = await verifyChain(path.join(dir, "log.receipta"), resolverFromTrustRoot(root));
+    const report = await verifyChain(path.join(dir, 'log.receipta'), resolverFromTrustRoot(root));
     expect(report.ok).toBe(true);
     expect(report.verifiedCount).toBe(100);
     // seq numbers on disk must be exactly 1..100 with no gaps or duplicates (no lost updates).
@@ -446,40 +452,42 @@ describe("chain — concurrency (S2.3)", () => {
   });
 });
 
-describe("trust — offline trust check (S4.2)", () => {
-  it("verify fails loud when the signing key is not in the trust root (S4.2)", async () => {
+describe('trust — offline trust check (S4.2)', () => {
+  it('verify fails loud when the signing key is not in the trust root (S4.2)', async () => {
     const kp = generateKeyPair();
-    const { store, dir } = await freshStore("untrusted");
+    const { store, dir } = await freshStore('untrusted');
     await appendN(store, kp, 2);
     await store.close();
 
     // A trust root with a DIFFERENT key.
     const otherKp = generateKeyPair();
-    const otherKeyDir = path.join(TMP, "otherkeys-" + Math.random().toString(36).slice(2));
+    const otherKeyDir = path.join(TMP, 'otherkeys-' + Math.random().toString(36).slice(2));
     await writeTrustedKey(otherKeyDir, otherKp.keyId, exportPublicKey(otherKp.publicKey));
     const root = await loadTrustRoot(otherKeyDir);
 
-    const report = await verifyChain(path.join(dir, "log.receipta"), resolverFromTrustRoot(root));
+    const report = await verifyChain(path.join(dir, 'log.receipta'), resolverFromTrustRoot(root));
     expect(report.ok).toBe(false);
-    expect(report.firstDivergence?.kind).toBe("untrusted-key");
-    expect(report.firstDivergence?.field).toBe("key_id");
+    expect(report.firstDivergence?.kind).toBe('untrusted-key');
+    expect(report.firstDivergence?.field).toBe('key_id');
   });
 
-  it("loadTrustRoot throws if the directory is missing (S4.2 — fail loud)", async () => {
-    await expect(loadTrustRoot(path.join(TMP, "does-not-exist"))).rejects.toThrow(/trust root not found/);
+  it('loadTrustRoot throws if the directory is missing (S4.2 — fail loud)', async () => {
+    await expect(loadTrustRoot(path.join(TMP, 'does-not-exist'))).rejects.toThrow(
+      /trust root not found/,
+    );
   });
 
   it("loadTrustRoot throws if a key file's name doesn't match its fingerprint (anti-substitution)", async () => {
     const kp = generateKeyPair();
-    const badKeyDir = path.join(TMP, "badname-" + Math.random().toString(36).slice(2));
+    const badKeyDir = path.join(TMP, 'badname-' + Math.random().toString(36).slice(2));
     // Write the key under a WRONG filename (a different hex string).
-    await writeTrustedKey(badKeyDir, "deadbeef".repeat(8), exportPublicKey(kp.publicKey));
+    await writeTrustedKey(badKeyDir, 'deadbeef'.repeat(8), exportPublicKey(kp.publicKey));
     await expect(loadTrustRoot(badKeyDir)).rejects.toThrow(/does not match.*fingerprint/);
   });
 
-  it("a trusted key round-trips: pubkey bytes → file → trust root → verifies (D5)", async () => {
+  it('a trusted key round-trips: pubkey bytes → file → trust root → verifies (D5)', async () => {
     const kp = generateKeyPair();
-    const keyDir = path.join(TMP, "roundtrip-" + Math.random().toString(36).slice(2));
+    const keyDir = path.join(TMP, 'roundtrip-' + Math.random().toString(36).slice(2));
     await writeTrustedKey(keyDir, kp.keyId, exportPublicKey(kp.publicKey));
     const root = await loadTrustRoot(keyDir);
     expect(root.keys.has(kp.keyId)).toBe(true);
@@ -488,80 +496,82 @@ describe("trust — offline trust check (S4.2)", () => {
     const resolver = resolverFromTrustRoot(root);
     const verifyFn = resolver(kp.keyId);
     expect(verifyFn).toBeDefined();
-    const data = Buffer.from("trust round trip", "utf8");
+    const data = Buffer.from('trust round trip', 'utf8');
     const sig = sign(data, kp.privateKey);
     expect(verifyFn!(data, sig)).toBe(true);
   });
 });
 
-describe("store — atomicity & process lock (D4/S2.3)", () => {
-  it("creating a store writes a meta sidecar with chain_id and commitment_key", async () => {
-    const { store, dir } = await freshStore("meta");
+describe('store — atomicity & process lock (D4/S2.3)', () => {
+  it('creating a store writes a meta sidecar with chain_id and commitment_key', async () => {
+    const { store, dir } = await freshStore('meta');
     await store.close();
-    const metaPath = path.join(dir, "log.receipta.meta.json");
+    const metaPath = path.join(dir, 'log.receipta.meta.json');
     expect(existsSync(metaPath)).toBe(true);
-    const meta = JSON.parse(await readFile(metaPath, "utf8"));
+    const meta = JSON.parse(await readFile(metaPath, 'utf8'));
     expect(meta.chain_id).toMatch(/^[0-9a-f-]{36}$/);
     expect(meta.commitment_key).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it("reopening a store preserves its chain_id and tip (appends continue the chain)", async () => {
+  it('reopening a store preserves its chain_id and tip (appends continue the chain)', async () => {
     const kp = generateKeyPair();
-    const keyDir = path.join(TMP, "reopen-keys-" + Math.random().toString(36).slice(2));
+    const keyDir = path.join(TMP, 'reopen-keys-' + Math.random().toString(36).slice(2));
     await writeTrustedKey(keyDir, kp.keyId, exportPublicKey(kp.publicKey));
-    const dir = path.join(TMP, "reopen");
+    const dir = path.join(TMP, 'reopen');
     await rm(dir, { recursive: true, force: true });
     await mkdir(dir, { recursive: true });
 
-    const store1 = await openStore(path.join(dir, "log.receipta"));
+    const store1 = await openStore(path.join(dir, 'log.receipta'));
     const chainId = store1.meta.chain_id;
     await appendN(store1, kp, 3);
     await store1.close();
 
     // Reopen — should see the same chain_id and seq=3.
-    const store2 = await openStore(path.join(dir, "log.receipta"));
+    const store2 = await openStore(path.join(dir, 'log.receipta'));
     expect(store2.meta.chain_id).toBe(chainId);
     expect(store2.lastSeq).toBe(3);
     await appendN(store2, kp, 2);
     await store2.close();
 
     const root = await loadTrustRoot(keyDir);
-    const report = await verifyChain(path.join(dir, "log.receipta"), resolverFromTrustRoot(root));
+    const report = await verifyChain(path.join(dir, 'log.receipta'), resolverFromTrustRoot(root));
     expect(report.ok).toBe(true);
     expect(report.verifiedCount).toBe(5); // 3 + 2, continuous
   });
 
-  it("a second opener fails loud while the first holds the lock (multi-process honesty, D3)", async () => {
-    const { store, dir } = await freshStore("lock");
+  it('a second opener fails loud while the first holds the lock (multi-process honesty, D3)', async () => {
+    const { store, dir } = await freshStore('lock');
     // store is still open (lock held)
-    await expect(openStore(path.join(dir, "log.receipta"))).rejects.toThrow(/locked by another writer/);
+    await expect(openStore(path.join(dir, 'log.receipta'))).rejects.toThrow(
+      /locked by another writer/,
+    );
     await store.close();
     // After close, the lock is released and reopening works.
-    const reopened = await openStore(path.join(dir, "log.receipta"));
+    const reopened = await openStore(path.join(dir, 'log.receipta'));
     await reopened.close();
   });
 });
 
-describe("chain — re-canonicalization at verify (D1 defense in depth)", () => {
-  it("a receipt whose stored field order differs still verifies (re-canon, D1)", async () => {
+describe('chain — re-canonicalization at verify (D1 defense in depth)', () => {
+  it('a receipt whose stored field order differs still verifies (re-canon, D1)', async () => {
     const kp = generateKeyPair();
-    const keyDir = path.join(TMP, "recanon-keys-" + Math.random().toString(36).slice(2));
+    const keyDir = path.join(TMP, 'recanon-keys-' + Math.random().toString(36).slice(2));
     await writeTrustedKey(keyDir, kp.keyId, exportPublicKey(kp.publicKey));
-    const { store, dir } = await freshStore("recanon");
+    const { store, dir } = await freshStore('recanon');
     await appendN(store, kp, 2);
     await store.close();
 
     // Read the log, re-serialize receipt #1 with REVERSED key order, and rewrite. The bytes the
     // verifier sees are different from what was signed ONLY if the verifier naively re-stringifies.
     // Our verifier re-canonicalizes (D1), so it should still verify.
-    const logPath = path.join(dir, "log.receipta");
+    const logPath = path.join(dir, 'log.receipta');
     const full = await readFile(logPath);
     // Parse the two records.
     const records: Receipt[] = [];
     let offset = 0;
     while (offset < full.length) {
       const len = full.readUInt32BE(offset);
-      const json = full.subarray(offset + 4, offset + 4 + len).toString("utf8");
+      const json = full.subarray(offset + 4, offset + 4 + len).toString('utf8');
       records.push(JSON.parse(json) as Receipt);
       offset += 4 + len + 1;
     }
@@ -569,9 +579,9 @@ describe("chain — re-canonicalization at verify (D1 defense in depth)", () => 
     const reversed = reverseKeyOrder(records[0]!.body);
     records[0]!.body = reversed as ReceiptBody;
     // Rewrite the log (re-canonicalizing each record into its frame).
-    const { canonicalize } = await import("./canon.js");
+    const { canonicalize } = await import('./canon.js');
     const frames = records.map((r) => {
-      const bytes = Buffer.from(canonicalize(r as unknown as Record<string, unknown>), "utf8");
+      const bytes = Buffer.from(canonicalize(r as unknown as Record<string, unknown>), 'utf8');
       const frame = Buffer.alloc(4 + bytes.length + 1);
       frame.writeUInt32BE(bytes.length, 0);
       bytes.copy(frame, 4);
@@ -589,7 +599,7 @@ describe("chain — re-canonicalization at verify (D1 defense in depth)", () => 
 /** Reverse the key order of an object's own keys (to simulate a different serializer). */
 function reverseKeyOrder(obj: unknown): unknown {
   if (Array.isArray(obj)) return obj.map(reverseKeyOrder);
-  if (obj && typeof obj === "object") {
+  if (obj && typeof obj === 'object') {
     const entries = Object.entries(obj).reverse();
     const out: Record<string, unknown> = {};
     for (const [k, v] of entries) out[k] = reverseKeyOrder(v);

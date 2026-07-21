@@ -6,13 +6,15 @@
  * import { registerTelemetry } from "ai";
  * import { receiptaTelemetry } from "@receipta/vercel";
  *
- * registerTelemetry(receiptaTelemetry({ store, signer, actor }));
- * // every generateText/streamText now emits a receipt via the callback.
+ * const telemetry = receiptaTelemetry({ store, signer, actor });
+ * registerTelemetry(telemetry);
+ * // every generateText/streamText now emits a receipt via the onLanguageModelCallEnd callback.
+ * await telemetry.flush(); // before closing the store — see the flush() contract below.
  * ```
  *
  * DESIGN (PLAN D8/D11, IMPLICIT_SPEC S1.3/S2.1/S2.5):
  * - Unlike the fetch adapters, there's no HTTP to wrap. The `Telemetry` integration's
- *   `onLanguageModelCallEnd`/`onEnd` callbacks deliver the FULL ASSEMBLED RESULT (independent of
+ *   `onLanguageModelCallEnd` callback delivers the FULL ASSEMBLED RESULT (independent of
  *   recordInputs/recordOutputs — verified firsthand), so the output commitment is over the final
  *   assembled output (S2.5).
  * - `content_captured` reflects whether the user enabled `recordInputs`/`recordOutputs`. The
@@ -20,11 +22,14 @@
  *   honestly (the S1.3 metadata-only edge case).
  * - Emission inside the callback is wrapped in try/catch and logged to a sidecar: the callback
  *   runs inside the SDK's own dispatch, so an uncaught throw would surface to the user's
- *   generateText/streamText and violate S2.1.
+ *   generateText/streamText and violate S2.1. NOTE: because the SDK callback contract is
+ *   `(event) => void` (not awaited), receipt emission is fire-and-forget; if the build/append
+ *   throws SYNCHRONOUSLY before a promise exists, that throw is converted to a rejection inside
+ *   `emit()` and logged rather than propagated to the caller. Call `flush()` to await the tail.
  * - A v6 shim maps the v6 names (`registerTelemetryIntegration`, `experimental_telemetry`,
  *   `onFinish`) to the v7 callback shape.
  */
-import { Buffer } from "node:buffer";
+import { Buffer } from 'node:buffer';
 import {
   appendBody,
   hmac,
@@ -36,7 +41,7 @@ import {
   type JsonValue,
   type KeyPair,
   type ReceiptStore,
-} from "@receipta/core";
+} from '@receipta/core';
 
 /** The event the v7 Telemetry integration delivers when a language model call ends. */
 export interface LanguageModelCallEndEvent {
@@ -53,20 +58,9 @@ export interface LanguageModelCallEndEvent {
   provider?: string;
 }
 
-/** The event delivered when a full stream/text generation ends. */
-export interface GenerationEndEvent {
-  text?: string;
-  usage?: { promptTokens?: number; completionTokens?: number };
-  finishReason?: string;
-  responseMessages?: unknown;
-  functionId?: string;
-  metadata?: Record<string, unknown>;
-}
-
-/** The v7 Telemetry integration shape (a subset — receipta only needs the call-end hooks). */
+/** The v7 Telemetry integration shape (a subset — receipta only needs the per-call hook). */
 export interface ReceiptaTelemetry {
   onLanguageModelCallEnd?: (event: LanguageModelCallEndEvent) => void;
-  onEnd?: (event: GenerationEndEvent) => void;
 }
 
 /** What the telemetry factory needs to build receipts. */
@@ -96,19 +90,22 @@ export interface ReceiptaTelemetryWithFlush extends ReceiptaTelemetry {
 /**
  * Build a Telemetry integration that emits a receipt for each language-model call.
  *
- * Returns an object suitable for `registerTelemetry(receiptaTelemetry(cfg))`. The receipt is
- * built in `onLanguageModelCallEnd` (the per-call hook); `onEnd` is wired for completeness but the
- * canonical record is the per-call one (a generation maps 1:1 to a model call in the common case).
+ * Returns an object suitable for `registerTelemetry(receiptaTelemetry(cfg))`. The receipt is built
+ * in `onLanguageModelCallEnd` — the per-call hook is the canonical record (a generation maps 1:1 to a
+ * model call in the common case). There is intentionally NO generation-end hook: the SDK does not
+ * guarantee one fires before the caller's promise resolves in a way we can rely on, and a second
+ * emission there would risk a double receipt for a single call.
  *
  * Because the SDK callback is `(event) => void` (not awaited), emission is fire-and-forget. The
  * returned object exposes `flush()` — call it before closing the store to drain pending receipts
- * (otherwise the final receipt(s) of a generation can be lost).
+ * (otherwise the final receipt(s) of a generation can be lost). Note `flush()` drains the snapshot of
+ * in-flight emissions at call time; emissions racing in after `flush()` returns are caller misuse.
  */
 export function receiptaTelemetry(config: ReceiptaTelemetryConfig): ReceiptaTelemetryWithFlush {
-  const captureMode = config.captureMode ?? "full";
+  const captureMode = config.captureMode ?? 'full';
   const logError = config.logError ?? defaultLogError;
   const signer = keyPairToSigner(config.signer);
-  const commitmentKey = Buffer.from(config.store.meta.commitment_key, "hex");
+  const commitmentKey = Buffer.from(config.store.meta.commitment_key, 'hex');
 
   // Track in-flight emissions so flush() can await them (the fire-and-forget race fix, F-2).
   let pending: Promise<void> = Promise.resolve();
@@ -116,46 +113,55 @@ export function receiptaTelemetry(config: ReceiptaTelemetryConfig): ReceiptaTele
   const onLanguageModelCallEnd = (event: LanguageModelCallEndEvent) => {
     // Wrap emission: the callback runs inside the SDK's dispatch, so a throw would surface to the
     // user's call (S2.1). Catch + log to sidecar. Track the promise so flush() can drain it.
-    pending = emit(pending, () => {
-      const model = event.model ?? "unknown";
-      const provider = event.provider ?? "vercel-ai-sdk";
-      const captured = captureMode === "full" && event.content !== undefined;
-      const content = captured
-        ? {
-            response: event.content as JsonValue,
-          }
-        : undefined;
-      const usage = event.usage
-        ? {
-            input_tokens: event.usage.promptTokens,
-            output_tokens: event.usage.completionTokens,
-          }
-        : undefined;
-      const commitments = content?.response !== undefined
-        ? {
-            response: toHex(hmac(commitmentKey, Buffer.from(JSON.stringify(content.response), "utf8"))),
-            response_integrity: toHex(sha256(Buffer.from(JSON.stringify(content.response), "utf8"))),
-          }
-        : undefined;
+    pending = emit(
+      pending,
+      () => {
+        const model = event.model ?? 'unknown';
+        const provider = event.provider ?? 'vercel-ai-sdk';
+        const captured = captureMode === 'full' && event.content !== undefined;
+        const content = captured
+          ? {
+              response: event.content as JsonValue,
+            }
+          : undefined;
+        const usage = event.usage
+          ? {
+              input_tokens: event.usage.promptTokens,
+              output_tokens: event.usage.completionTokens,
+            }
+          : undefined;
+        const commitments =
+          content?.response !== undefined
+            ? {
+                response: toHex(
+                  hmac(commitmentKey, Buffer.from(JSON.stringify(content.response), 'utf8')),
+                ),
+                response_integrity: toHex(
+                  sha256(Buffer.from(JSON.stringify(content.response), 'utf8')),
+                ),
+              }
+            : undefined;
 
-      return appendBody(
-        config.store,
-        {
-          timestamp: { iso8601_ms: new Date().toISOString(), trust_level: "local_asserted" },
-          actor: config.actor,
-          provider,
-          model,
-          request_id: event.callId ?? event.responseId,
-          outcome: event.finishReason === "error" ? "error" : "success",
-          content_captured: captured,
-          capture_mode: captureMode,
-          content,
-          content_commitments: commitments,
-          usage,
-        },
-        signer,
-      );
-    }, logError);
+        return appendBody(
+          config.store,
+          {
+            timestamp: { iso8601_ms: new Date().toISOString(), trust_level: 'local_asserted' },
+            actor: config.actor,
+            provider,
+            model,
+            request_id: event.callId ?? event.responseId,
+            outcome: event.finishReason === 'error' ? 'error' : 'success',
+            content_captured: captured,
+            capture_mode: captureMode,
+            content,
+            content_commitments: commitments,
+            usage,
+          },
+          signer,
+        );
+      },
+      logError,
+    );
   };
 
   return {
@@ -189,7 +195,7 @@ function emit(
     () => Promise.resolve().then(build),
     () => Promise.resolve().then(build),
   );
-  next.catch((err) => logError("failed to append receipt from telemetry callback", err));
+  next.catch((err) => logError('failed to append receipt from telemetry callback', err));
   // Convert to Promise<void> for the chain; a rejection was already logged above.
   return next.then(
     () => undefined,
@@ -216,7 +222,13 @@ export interface ReceiptaTelemetryV6 {
   /** v6 experimental_telemetry options surface. */
   options?: Record<string, unknown>;
   /** v6 finish callback (maps to onLanguageModelCallEnd). */
-  onFinish?: (result: { finishReason?: string; usage?: { promptTokens?: number; completionTokens?: number }; text?: string; response?: { id?: string; messages?: unknown }; model?: string }) => void;
+  onFinish?: (result: {
+    finishReason?: string;
+    usage?: { promptTokens?: number; completionTokens?: number };
+    text?: string;
+    response?: { id?: string; messages?: unknown };
+    model?: string;
+  }) => void;
   /** Await all in-flight receipt emissions (the fire-and-forget race fix). */
   flush?: () => Promise<void>;
 }
@@ -224,7 +236,7 @@ export interface ReceiptaTelemetryV6 {
 export function receiptaTelemetryV6(config: ReceiptaTelemetryConfig): ReceiptaTelemetryV6 {
   const v7 = receiptaTelemetry(config);
   return {
-    name: "receipta",
+    name: 'receipta',
     onFinish: (result) => {
       v7.onLanguageModelCallEnd?.({
         finishReason: result.finishReason,
@@ -239,5 +251,5 @@ export function receiptaTelemetryV6(config: ReceiptaTelemetryConfig): ReceiptaTe
   };
 }
 
-export { keyPairToSigner } from "@receipta/core";
-export type { Actor, ContentCaptureMode, ReceiptStore } from "@receipta/core";
+export { keyPairToSigner } from '@receipta/core';
+export type { Actor, ContentCaptureMode, ReceiptStore } from '@receipta/core';

@@ -1,7 +1,7 @@
-import type { Theme } from "vitepress";
-import DefaultTheme from "vitepress/theme";
-import "./variables.css";
-import "./style.css";
+import type { Theme } from 'vitepress';
+import DefaultTheme from 'vitepress/theme';
+import './variables.css';
+import './style.css';
 
 export default {
   extends: DefaultTheme,

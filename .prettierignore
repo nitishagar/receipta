@@ -1,0 +1,21 @@
+# Build output (do not format generated files)
+dist/
+build/
+*.tsbuildinfo
+
+# VitePress generated site + cache
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+
+# Lockfiles (machine-generated, large, reflowed by every install)
+pnpm-lock.yaml
+pnpm-workspace.yaml
+
+# Test/coverage artifacts
+coverage/
+*.lcov
+.vitest/
+.vitest-tmp/
+
+# Internal notes — not part of the public repo (gitignored), never formatted (WI-19)
+thoughts/

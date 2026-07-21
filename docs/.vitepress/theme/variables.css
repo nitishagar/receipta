@@ -14,7 +14,7 @@
  * guards, preserving INV-10 (single source of truth, zero drift).
  */
 
-@import "../../../packages/design-tokens/src/variables.css";
+@import '../../../packages/design-tokens/src/variables.css';
 
 /* ----------------------------------------------------------------------------
  * Brand — opencode is monochrome; "brand" becomes the strong text/ink color, not

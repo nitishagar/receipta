@@ -1,0 +1,15 @@
+# Default owners — every path requires review from at least one of these.
+# Add per-area owners below as the project grows.
+*           @nitishagar
+
+# Cryptographic correctness (canonicalization, signing, store, chain) — highest-stakes changes.
+# Surface an extra pair of eyes before merging anything here.
+/packages/core/src/canon.ts    @nitishagar
+/packages/core/src/crypto.ts   @nitishagar
+/packages/core/src/store.ts    @nitishagar
+/packages/core/src/chain.ts    @nitishagar
+/packages/core/src/schema.ts   @nitishagar
+
+# CI / release / publishing — infrastructure changes that affect every release.
+/.github/workflows/            @nitishagar
+/.github/CODEOWNERS            @nitishagar

@@ -6,12 +6,12 @@ receipta v0.1 defends against a **specific, narrow** threat: an external party w
 
 ## The adversary classes
 
-| Class | Description | Defended by v0.1? |
-| --- | --- | --- |
-| **T1** | External tamperer with store access, **no signing key** | ✅ **Yes** |
+| Class  | Description                                                                          | Defended by v0.1?                   |
+| ------ | ------------------------------------------------------------------------------------ | ----------------------------------- |
+| **T1** | External tamperer with store access, **no signing key**                              | ✅ **Yes**                          |
 | **T2** | The operator/record-keeper themselves (holds the signing key, can rewrite + re-sign) | ❌ No — requires external anchoring |
-| **T3** | Tail truncation (deletion of recent records) | ❌ No — requires anchoring |
-| **T4** | Fork / split-view (presenting different chains to different verifiers) | ❌ No — requires a transparency log |
+| **T3** | Tail truncation (deletion of recent records)                                         | ❌ No — requires anchoring          |
+| **T4** | Fork / split-view (presenting different chains to different verifiers)               | ❌ No — requires a transparency log |
 
 ## What v0.1 defends (T1)
 
@@ -28,7 +28,7 @@ Verification names the **first** divergence precisely (which receipt, which fiel
 
 This is the honest boundary. A locally-signed hash chain **cannot**, by itself, defend against:
 
-- **T2 — the operator re-signing a rewritten chain.** The operator holds the signing key, so they can delete the real chain, write a new one, and re-sign every receipt. The signatures would all verify. This is the threat regulators care most about (the SEC WORM rationale is explicitly about protecting records *from the firm keeping them*).
+- **T2 — the operator re-signing a rewritten chain.** The operator holds the signing key, so they can delete the real chain, write a new one, and re-sign every receipt. The signatures would all verify. This is the threat regulators care most about (the SEC WORM rationale is explicitly about protecting records _from the firm keeping them_).
 - **T3 — truncating the tail.** Deleting the most recent receipts leaves a valid (but incomplete) prefix chain. Chain verification alone cannot tell you records are missing.
 - **T4 — fork/split-view.** An operator can present chain A to one verifier and chain B to another. Local verification of either passes.
 
@@ -46,13 +46,18 @@ receipta's receipt schema **reserves** the fields needed for anchoring:
 
 - an `anchor` field (for RFC 3161 tokens, transparency-log inclusion proofs, witness co-signatures),
 - a graded `timestamp.trust_level` enum (`local_asserted` | `rfc3161` | `transparency_log` | `witness`),
-- a `segment_link` record type (for chain continuity across file rotation over multi-year retention).
+- an open `extensions` map with a `critical` flag, so future anchoring fields can be added without a
+  schema break (unknown critical extensions fail verification; non-critical ones are ignored for
+  forward compatibility).
+
+Multi-year retention across file rotation is a future concern; v0.1 ships a single append-only store
+per chain and does not yet define a cross-file linkage record.
 
 v0.1 leaves these unpopulated (`trust_level: local_asserted`). **Adding anchoring is a future release**, not a property of v0.1. The format not precluding it is a design requirement; shipping it is out of scope for the MVP.
 
 ## Tamper-evidence vs. legal mandate
 
-receipta is marketed as **defensibility and auditor-trust**, not as "legally mandated by EU AI Act Article 12." The claim that Art. 12 *requires* cryptographic tamper-evidence is contested — the article requires logging, retention, and auditability, and how that's satisfied is a compliance determination for your own counsel. receipta is a tool that *can support* such determinations; it is not legal advice and not a compliance certification.
+receipta is marketed as **defensibility and auditor-trust**, not as "legally mandated by EU AI Act Article 12." The claim that Art. 12 _requires_ cryptographic tamper-evidence is contested — the article requires logging, retention, and auditability, and how that's satisfied is a compliance determination for your own counsel. receipta is a tool that _can support_ such determinations; it is not legal advice and not a compliance certification.
 
 ## Single-writer scope
 
