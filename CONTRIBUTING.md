@@ -109,6 +109,12 @@ its change. Multiple changesets may accumulate before a release.
 4. The Publish workflow builds all packages and publishes to npm with `--provenance`
    (Sigstore/SLSA attestation). Confirm each `@receipta/*` package appears on npm with a
    "Provenance" badge.
+5. A successful `Publish` triggers the [`Smoke-publish`](/.github/workflows/smoke-publish.yml)
+   workflow, which installs the just-tagged versions from npm in a clean directory and imports each
+   `@receipta/*` package. A **green** `Publish` followed by a **red** `Smoke-publish` means the
+   published artifacts are broken (e.g. a malformed `files`/`exports` whitelist shipped a package
+   that installs but can't be imported) — the release should be patched or yanked. Check
+   `gh run list --workflow=smoke-publish.yml` after a release.
 
 > **Root `CHANGELOG.md`:** changesets maintains a per-package changelog under each
 > `packages/*/CHANGELOG.md`. The root [`CHANGELOG.md`](./CHANGELOG.md) is the curated,
