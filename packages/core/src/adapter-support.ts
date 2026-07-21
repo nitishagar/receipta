@@ -35,6 +35,19 @@ export interface ProviderAdapter {
   provider: string;
   /** The headers that may carry the request id (checked in order). */
   requestIdHeaders: string[];
+  /**
+   * The REQUEST headers that may carry a Stainless-style retry-count (checked in order). Read from
+   * `init.headers` (the request the SDK hands to fetch), NOT response headers. The OpenAI and
+   * Anthropic Stainless SDKs set `x-stainless-retry-count` on every attempt (0 on first,
+   * incrementing on retry). When no listed header is present-and-numeric, `attempt_index` is left
+   * undefined → omitted from the receipt (honest absence, never a fabricated 0 — N4/BA1).
+   *
+   * Optional: omitted values are backfilled with the default `['x-stainless-retry-count']` in
+   * `createReceiptFetch`'s provider merge, so built-in providers, the test fixture, and external
+   * implementers all get the default without setting it explicitly. A non-empty override REPLACES
+   * the list (the caller knows their gateway's header), mirroring `requestIdHeaders`.
+   */
+  retryCountHeaders?: string[];
   /** Extract usage from a parsed response body (or undefined if absent). */
   extractUsage(body: JsonValue): Usage | undefined;
   /** Extract the model from a parsed response body (or undefined if absent). */
@@ -97,9 +110,18 @@ export function createReceiptFetch(
   // Merge the provider override once, at construction (G1.2). The override wins per field: a
   // `requestIdHeaders` override REPLACES the builtin list (the caller knows their gateway). The
   // builtin supplies every required field, so the merged object satisfies ProviderAdapter.
-  const effectiveProvider: ProviderAdapter = config.provider
+  const mergedProvider: ProviderAdapter = config.provider
     ? { ...provider, ...config.provider }
     : provider;
+  // N4/BA1: `retryCountHeaders` is optional on the interface; apply the default HERE (the single
+  // place the merge happens) so built-in providers, the test fixture, AND any external implementer
+  // that omits the field all get the default. The built-in provider objects intentionally do NOT
+  // set it explicitly — that would duplicate the default and was ambiguous in an earlier draft.
+  // Bound to a local so the type is `string[]` (not `string[] | undefined`) at the call sites.
+  const retryCountHeaders: string[] = mergedProvider.retryCountHeaders ?? [
+    'x-stainless-retry-count',
+  ];
+  const effectiveProvider: ProviderAdapter = { ...mergedProvider, retryCountHeaders };
 
   return async (input, init) => {
     const requestStartTime = new Date();
@@ -133,7 +155,7 @@ export function createReceiptFetch(
         responseBody: undefined,
         requestId: undefined,
         outcome: 'error',
-        attemptIndex: readAttemptIndex(init),
+        attemptIndex: readAttemptIndex(init, retryCountHeaders),
         captureMode,
       }).catch(() => undefined);
       throw err;
@@ -176,7 +198,7 @@ export function createReceiptFetch(
       responseText,
       requestId,
       outcome: effectiveProvider.outcomeFromStatus(response.status),
-      attemptIndex: readAttemptIndex(init),
+      attemptIndex: readAttemptIndex(init, retryCountHeaders),
       captureMode,
     }).catch(() => undefined);
 
@@ -342,16 +364,68 @@ function bodyHasError(responseBody: JsonValue | undefined): boolean {
 }
 
 /**
- * Attempt index: OpenAI/Anthropic don't expose the retry count to the fetch layer directly, but
- * they set headers on retries. We record the attempt as best-effort (defaulting to 0). Each HTTP
- * attempt gets its own receipt regardless (the wrapper is invoked per attempt — S2.2), so even
- * without an exact index, every attempt is attributable.
+ * Attempt index (N4/BA1): read a Stainless-style retry count from the REQUEST headers (`init.headers`),
+ * NOT the response. The OpenAI/Anthropic Stainless SDKs set `x-stainless-retry-count` on every
+ * attempt (0 on first, incrementing on retry). When the header is absent or non-numeric, returns
+ * `undefined` → `attempt_index` is omitted from the receipt (honest absence, never a fabricated 0 —
+ * a gateway that strips the header yields `attempt_index: undefined` by design). Each HTTP attempt
+ * gets its own receipt regardless (the wrapper is invoked per attempt — S2.2), so even without an
+ * index every attempt is attributable; this populates it when the SDK provides one.
+ *
+ * No shared mutable state across calls (BA1: no cross-call counter). S2.1 non-interference: the
+ * entire body is wrapped in try/catch → `undefined`, so a hostile `init.headers` (throwing getters,
+ * shadowed `Array.find`, cross-realm `Headers` defeating `instanceof`) can NEVER throw into the
+ * wrapped call — the guarantee the plan's Design Analysis requires, now enforced rather than
+ * hoped. Header names are matched case-insensitively per the WHATWG fetch
+ * spec. `RequestInit.headers` is the `HeadersInit` union — all three concrete forms are handled:
+ * `Headers`, `string[][]`, and `Record<string,string>`. Parses with `/^\d+$/` so floats and
+ * non-numeric values collapse to `undefined` (never a misleading 0). Note on whitespace: the
+ * `Headers` form normalizes values on read (OWS trimmed per the WHATWG fetch spec), so `' 2 '`
+ * arrives as `'2'` and is a legitimate retry-count signal; the `string[][]` and `Record` forms do
+ * NOT normalize, so whitespace-padded values there are correctly rejected by the regex.
  */
-function readAttemptIndex(init?: RequestInit): number | undefined {
-  // No reliable per-attempt index from the SDK; we leave it unset unless the caller threads one.
-  // The wrapper being invoked per-attempt is the attribution mechanism.
-  void init;
-  return undefined;
+function readAttemptIndex(
+  init: RequestInit | undefined,
+  names: readonly string[],
+): number | undefined {
+  // S2.1: this runs synchronously inside the `safeEmit(...)` argument literal at both call sites,
+  // so a throw here escapes the `.catch(() => undefined)` on safeEmit's returned Promise and would
+  // fail the user's call. The whole body is guarded: hostile `init.headers` (throwing getters,
+  // shadowed `Array.find`, a cross-realm `Headers` where `instanceof Headers` is false and the code
+  // falls through to the unguarded Record branch) collapse to `undefined` rather than throwing.
+  // `attempt_index` is best-effort; absence is always honest (N4), so swallowing is correct here.
+  try {
+    if (!init?.headers) return undefined;
+    const h = init.headers;
+    // One lookup closure handling all three HeadersInit forms explicitly (no placeholder comment).
+    const lookup = (name: string): string | null => {
+      const lower = name.toLowerCase();
+      if (h instanceof Headers) return h.get(name); // Headers.get is itself case-insensitive.
+      if (Array.isArray(h)) {
+        // string[][] — [key, value] pairs. Destructure defensively: a malformed entry may be missing
+        // its key or value (noUncheckedIndexedAccess surfaces this); skip such entries.
+        const entry = h.find((pair) => {
+          const k = pair?.[0];
+          return typeof k === 'string' && k.toLowerCase() === lower;
+        });
+        if (!entry) return null;
+        const v = entry[1];
+        return typeof v === 'string' ? v : null;
+      }
+      // Record<string,string> — header names are case-insensitive per the fetch spec.
+      const record = h as Record<string, string>;
+      const key = Object.keys(record).find((k) => k.toLowerCase() === lower);
+      return key != null ? String(record[key]) : null;
+    };
+    for (const name of names) {
+      const raw = lookup(name);
+      if (raw != null && /^\d+$/.test(raw)) return Number(raw);
+    }
+    return undefined;
+  } catch {
+    // Any property access / coercion threw on a hostile `init.headers` → honest absence.
+    return undefined;
+  }
 }
 
 /**

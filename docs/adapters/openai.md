@@ -48,6 +48,7 @@ const res = await client.chat.completions.create({
 - `model`: from the response body
 - `usage`: `prompt_tokens` / `completion_tokens` (mapped to `input_tokens` / `output_tokens`)
 - `request_id`: the `x-request-id` header
+- `attempt_index`: best-effort, sourced from the Stainless SDK's `x-stainless-retry-count` request header (`0` on the first attempt, incrementing on retry); omitted when the header is absent
 - `outcome`: `success` for 2xx, `error` otherwise
 - `content`: the request + response bodies (when `captureMode: "full"`)
 - `content_commitments`: HMAC-SHA256 over request/response (keyed, not bare digests)
