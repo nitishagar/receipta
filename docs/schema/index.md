@@ -33,6 +33,8 @@ A receipta receipt is a JSON object: a `body` (the signed payload) and a detache
 }
 ```
 
+`attempt_index` is best-effort: it is populated only when the provider's SDK sets a retry-count request header (the OpenAI and Anthropic Stainless SDKs set `x-stainless-retry-count` — `0` on the first attempt, incrementing on retry). When no retry-count header is present (a non-Stainless provider, a caller-supplied fetch, or a gateway that strips it), `attempt_index` is omitted from the receipt rather than defaulted to `0` — absence is honest, not "first attempt."
+
 ## Fields
 
 | Field                   | Meaning                                                          | Invariant |
@@ -49,7 +51,7 @@ A receipta receipt is a JSON object: a `body` (the signed payload) and a detache
 | `provider`              | `"openai"` \| `"anthropic"` \| `"vercel-ai-sdk"` \| …            | —         |
 | `model`                 | The model that answered                                          | —         |
 | `request_id`            | The provider's request id (for correlation)                      | —         |
-| `attempt_index`         | Which retry attempt (best-effort)                                | S2.2      |
+| `attempt_index`         | Which retry attempt (best-effort; see note above)                | S2.2      |
 | `outcome`               | `"success"` \| `"error"` \| `"retry"`                            | S2.2      |
 | `content_captured`      | Whether prompt/completion bytes are present                      | S1.3      |
 | `capture_mode`          | `"full"` \| `"metadata_only"`                                    | S1.3      |

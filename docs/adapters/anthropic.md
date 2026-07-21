@@ -45,5 +45,6 @@ const res = await client.messages.create({
 - `model`: from the response body
 - `usage`: `input_tokens` / `output_tokens`
 - `request_id`: the `request-id` header
+- `attempt_index`: best-effort, sourced from the Stainless SDK's `x-stainless-retry-count` request header (`0` on the first attempt, incrementing on retry); omitted when the header is absent
 - `outcome`: `success` for 2xx, `error` otherwise
 - `content`: the request + response bodies (when `captureMode: "full"`)
