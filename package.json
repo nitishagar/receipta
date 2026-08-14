@@ -36,7 +36,8 @@
     "verify:demo": "pnpm --filter @receipta/core build && node packages/core/scripts/verify-demo.mjs",
     "example": "pnpm build && node examples/quickstart/run.mjs",
     "changeset": "changeset",
-    "version": "changeset version"
+    "version": "changeset version",
+    "smoke:local": "node scripts/smoke-local.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "2.31.1",
