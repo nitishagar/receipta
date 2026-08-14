@@ -79,6 +79,44 @@ describe('receiptaTelemetry — receipt emission from the callback', () => {
     expect(r.body.content_commitments?.response).toMatch(/^[0-9a-f]{64}$/);
   });
 
+  it('maps BOTH ai-SDK usage spellings (v6 prompt/completion, v7 input/output) honestly', async () => {
+    const tel = receiptaTelemetry({
+      store: setup.store,
+      signer: setup.kp,
+      actor: { type: 'agent', id: 'my-agent' },
+    });
+    // v7 spelling only (v6 names absent — previously dropped to undefined silently).
+    tel.onLanguageModelCallEnd!({
+      model: 'gpt-4o',
+      finishReason: 'stop',
+      usage: { inputTokens: 7, outputTokens: 5 },
+    });
+    // Mixed spellings: v6 wins where both sides of a pair exist (prompt side v6, output side v7).
+    tel.onLanguageModelCallEnd!({
+      model: 'gpt-4o',
+      finishReason: 'stop',
+      usage: { promptTokens: 9, outputTokens: 4 },
+    });
+    // usage object present but NEITHER spelling of either side — absence must stay absent.
+    tel.onLanguageModelCallEnd!({
+      model: 'gpt-4o',
+      finishReason: 'stop',
+      usage: {},
+    });
+    await tel.flush();
+    await setup.store.close();
+
+    const report = await verifyStore(setup.dir, setup.keyDir);
+    expect(report.ok).toBe(true);
+    expect(report.receipts).toHaveLength(3);
+    // v7 spelling mapped through.
+    expect(report.receipts[0]!.body.usage).toEqual({ input_tokens: 7, output_tokens: 5 });
+    // Mixed: promptTokens (v6) preferred for input, outputTokens (v7) fills output.
+    expect(report.receipts[1]!.body.usage).toEqual({ input_tokens: 9, output_tokens: 4 });
+    // Empty usage object: canonicalization drops the undefined keys — no fabricated zeros, no {} keys.
+    expect(report.receipts[2]!.body.usage).toEqual({});
+  });
+
   it('computes the output commitment over the FINAL ASSEMBLED output (S2.5), not chunks', async () => {
     // The callback fires ONCE with the fully-assembled content; there is no intermediate-chunk
     // path. We assert the commitment is EXACTLY HMAC over the assembled bytes (recomputed
@@ -239,6 +277,27 @@ describe('receiptaTelemetryV6 — v6 shim', () => {
     expect(r.body.usage).toEqual({ input_tokens: 3, output_tokens: 2 });
     expect(r.body.content_captured).toBe(true);
     expect(r.body.content?.response).toBe('v6 assembled answer');
+  });
+
+  it('accepts the v7 usage spelling through the shim too (same single mapping point)', async () => {
+    const setup = await freshStore();
+    const v6 = receiptaTelemetryV6({
+      store: setup.store,
+      signer: setup.kp,
+      actor: { type: 'agent', id: 'a' },
+    });
+    v6.onFinish!({
+      finishReason: 'stop',
+      usage: { inputTokens: 13, outputTokens: 8 },
+      text: 'v7 spelling through v6 shim',
+      model: 'gpt-4o',
+    });
+    await v6.flush!();
+    await setup.store.close();
+
+    const report = await verifyStore(setup.dir, setup.keyDir);
+    expect(report.ok).toBe(true);
+    expect(report.receipts[0]!.body.usage).toEqual({ input_tokens: 13, output_tokens: 8 });
   });
 });
 
