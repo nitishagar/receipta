@@ -17,7 +17,7 @@ trusting the operator, the dashboard, or the network.
 
 **v0.1 (MVP), packages published at v0.2.0.** Single-process local store, Ed25519 signatures,
 full-chain offline verification, JSON-native receipts (RFC 8785 canonical), DSSE/in-toto export,
-and a CLI for `key gen` / `verify` / `export`. See the
+and a CLI for `key gen` / `verify` / `export` (filterable) / `show` / `tail`. See the
 [threat model](https://nitishagar.github.io/receipta/guide/threat-model) for what v0.1 defends
 against (and honestly does not).
 

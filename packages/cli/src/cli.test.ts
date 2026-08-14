@@ -477,6 +477,319 @@ describe('CLI — key gen', () => {
   });
 });
 
+describe('CLI — show', () => {
+  beforeEach(async () => {
+    await rm(TMP, { recursive: true, force: true });
+    await mkdir(TMP, { recursive: true });
+  });
+
+  it('prints one receipt (pretty JSON) by seq, without creating a lock file', async () => {
+    const { logPath } = await buildDemoStore(3);
+    const res = await runCli(['show', logPath, '2']);
+    expect(res.exitCode).toBe(0);
+    const parsed = JSON.parse(res.stdout);
+    expect(parsed.body.seq).toBe(2);
+    expect(parsed.body.request_id).toBe('req-1');
+    expect(parsed.signature).toBeTruthy();
+    // Read-only: show must not acquire the write lock (no .lock sibling created).
+    const lock = `${logPath}.lock`;
+    const { access } = await import('node:fs/promises');
+    await expect(access(lock)).rejects.toThrow();
+  });
+
+  it('exits 1 naming the seq when the receipt is absent', async () => {
+    const { logPath } = await buildDemoStore(2);
+    const res = await runCli(['show', logPath, '9']);
+    expect(res.exitCode).toBe(1);
+    expect(res.stderr).toContain('seq=9');
+    expect(res.stderr).toContain(logPath);
+  });
+
+  it('exits 1 for a receipt hidden behind a torn tail (torn frames are skipped, never shown)', async () => {
+    const { logPath } = await buildDemoStore(3);
+    // Tear the LAST frame: strip its terminator + trailing bytes so record 3 is unparseable.
+    const buf = await readFile(logPath);
+    await writeFile(logPath, buf.subarray(0, buf.length - 3));
+    const ok = await runCli(['show', logPath, '3']);
+    expect(ok.exitCode).toBe(1);
+    expect(ok.stderr).toContain('seq=3');
+    // Earlier receipts are unaffected.
+    const fine = await runCli(['show', logPath, '2']);
+    expect(fine.exitCode).toBe(0);
+  });
+
+  it('exits 2 on a missing or non-integer seq positional', async () => {
+    const { logPath } = await buildDemoStore(1);
+    expect((await runCli(['show', logPath])).exitCode).toBe(2);
+    expect((await runCli(['show', logPath, 'abc'])).exitCode).toBe(2);
+    expect((await runCli(['show'])).exitCode).toBe(2);
+  });
+});
+
+describe('CLI — tail', () => {
+  beforeEach(async () => {
+    await rm(TMP, { recursive: true, force: true });
+    await mkdir(TMP, { recursive: true });
+  });
+
+  it('defaults to the last 10 receipts as NDJSON', async () => {
+    const { logPath } = await buildDemoStore(3);
+    const res = await runCli(['tail', logPath]);
+    expect(res.exitCode).toBe(0);
+    const lines = res.stdout.trim().split('\n');
+    expect(lines).toHaveLength(3);
+    expect(lines.map((l) => JSON.parse(l).body.seq)).toEqual([1, 2, 3]);
+  });
+
+  it('prints exactly the last n when n < count', async () => {
+    const { logPath } = await buildDemoStore(5);
+    const res = await runCli(['tail', logPath, '2']);
+    expect(res.exitCode).toBe(0);
+    const lines = res.stdout.trim().split('\n');
+    expect(lines.map((l) => JSON.parse(l).body.seq)).toEqual([4, 5]);
+  });
+
+  it('n=0 prints nothing, exit 0; n > count prints all', async () => {
+    const { logPath } = await buildDemoStore(3);
+    const zero = await runCli(['tail', logPath, '0']);
+    expect(zero.exitCode).toBe(0);
+    expect(zero.stdout).toBe('');
+    const big = await runCli(['tail', logPath, '50']);
+    expect(big.stdout.trim().split('\n')).toHaveLength(3);
+  });
+
+  it('skips a torn tail and prints the parseable receipts before it', async () => {
+    const { logPath } = await buildDemoStore(3);
+    const buf = await readFile(logPath);
+    await writeFile(logPath, Buffer.concat([buf, Buffer.from([0, 0, 0, 5, 0x7b])]));
+    const res = await runCli(['tail', logPath]);
+    expect(res.exitCode).toBe(0);
+    expect(res.stdout.trim().split('\n')).toHaveLength(3);
+  });
+
+  it('exits 2 on a non-integer count; a negative count is a usage error, not a crash', async () => {
+    const { logPath } = await buildDemoStore(2);
+    expect((await runCli(['tail', logPath, 'abc'])).exitCode).toBe(2);
+    // `-5` is option-shaped: parseArgs strict mode rejects it and parse() maps that to exit 2
+    // (never the stack-trace unexpected-error path).
+    const neg = await runCli(['tail', logPath, '-5']);
+    expect(neg.exitCode).toBe(2);
+    expect(neg.stderr).not.toContain('unexpected error');
+  });
+});
+
+/** Store with varied actor/provider/timestamps so filter behavior is observable per receipt. */
+async function buildVariedStore(): Promise<{ logPath: string }> {
+  const dir = path.join(TMP, `varied-${Math.random().toString(36).slice(2)}`);
+  await mkdir(dir, { recursive: true });
+  const kp = generateKeyPair();
+  const logPath = path.join(dir, 'log.receipta');
+  const store = await openStore(logPath);
+  const signer = {
+    keyId: kp.keyId,
+    sign: (c: string) => sign(Buffer.from(c, 'utf8'), kp.privateKey),
+  };
+  const rows = [
+    { actor: 'app', provider: 'openai', ts: '2026-07-10T08:06:00.000Z' },
+    { actor: 'bob', provider: 'anthropic', ts: '2026-07-10T09:00:00.000Z' },
+    { actor: 'app', provider: 'anthropic', ts: '2026-07-10T10:00:00.000Z' },
+    { actor: 'bob', provider: 'openai', ts: '2026-07-10T11:00:00.000Z' },
+  ];
+  for (const r of rows) {
+    await appendBody(
+      store,
+      {
+        timestamp: { iso8601_ms: r.ts, trust_level: 'local_asserted' },
+        actor: { type: 'service', id: r.actor },
+        provider: r.provider,
+        model: 'm',
+        outcome: 'success',
+        content_captured: false,
+        capture_mode: 'metadata',
+      },
+      signer,
+    );
+  }
+  await store.close();
+  return { logPath };
+}
+
+describe('CLI — export filters', () => {
+  beforeEach(async () => {
+    await rm(TMP, { recursive: true, force: true });
+    await mkdir(TMP, { recursive: true });
+  });
+
+  async function seqs(args: string[]): Promise<number[]> {
+    const res = await runCli(args);
+    expect(res.exitCode).toBe(0);
+    return (JSON.parse(res.stdout) as { body: { seq: number } }[]).map((r) => r.body.seq);
+  }
+
+  it('--from-seq/--to-seq are inclusive bounds', async () => {
+    const { logPath } = await buildVariedStore();
+    expect(await seqs(['export', logPath, '--format', 'json', '--from-seq', '2'])).toEqual([
+      2, 3, 4,
+    ]);
+    expect(await seqs(['export', logPath, '--format', 'json', '--to-seq', '2'])).toEqual([1, 2]);
+    expect(
+      await seqs(['export', logPath, '--format', 'json', '--from-seq', '2', '--to-seq', '3']),
+    ).toEqual([2, 3]);
+  });
+
+  it('--since/--until compare timestamps inclusively (UTC ISO only)', async () => {
+    const { logPath } = await buildVariedStore();
+    expect(
+      await seqs(['export', logPath, '--format', 'json', '--since', '2026-07-10T09:00:00.000Z']),
+    ).toEqual([2, 3, 4]);
+    expect(
+      await seqs(['export', logPath, '--format', 'json', '--until', '2026-07-10T09:00:00.000Z']),
+    ).toEqual([1, 2]);
+    expect(
+      await seqs([
+        'export',
+        logPath,
+        '--format',
+        'json',
+        '--since',
+        '2026-07-10T08:06:00.000Z',
+        '--until',
+        '2026-07-10T10:00:00.000Z',
+      ]),
+    ).toEqual([1, 2, 3]);
+  });
+
+  it('--actor matches body.actor.id and --provider matches body.provider exactly', async () => {
+    const { logPath } = await buildVariedStore();
+    expect(await seqs(['export', logPath, '--format', 'json', '--actor', 'app'])).toEqual([1, 3]);
+    expect(await seqs(['export', logPath, '--format', 'json', '--provider', 'anthropic'])).toEqual([
+      2, 3,
+    ]);
+    // AND-composition.
+    expect(
+      await seqs([
+        'export',
+        logPath,
+        '--format',
+        'json',
+        '--actor',
+        'app',
+        '--provider',
+        'anthropic',
+      ]),
+    ).toEqual([3]);
+  });
+
+  it('a filter matching nothing exports an empty set, exit 0 (CSV: header only)', async () => {
+    const { logPath } = await buildVariedStore();
+    expect(await seqs(['export', logPath, '--format', 'json', '--actor', 'nobody'])).toEqual([]);
+    const csv = await runCli(['export', logPath, '--format', 'csv', '--actor', 'nobody']);
+    expect(csv.exitCode).toBe(0);
+    expect(csv.stdout.trim().split('\n')).toHaveLength(1); // header only
+  });
+
+  it('rejects malformed filter values with exit 2', async () => {
+    const { logPath } = await buildVariedStore();
+    const badSince = await runCli([
+      'export',
+      logPath,
+      '--format',
+      'json',
+      '--since',
+      'Aug 14 2026',
+    ]);
+    expect(badSince.exitCode).toBe(2);
+    expect(badSince.stderr).toContain('--since');
+    expect(
+      (await runCli(['export', logPath, '--format', 'json', '--until', 'yesterday'])).exitCode,
+    ).toBe(2);
+    expect(
+      (await runCli(['export', logPath, '--format', 'json', '--from-seq', 'abc'])).exitCode,
+    ).toBe(2);
+    expect(
+      (await runCli(['export', logPath, '--format', 'json', '--to-seq', '1.5'])).exitCode,
+    ).toBe(2);
+  });
+
+  it('filter flags are rejected (exit 2) on every non-export command — verify stays whole-chain', async () => {
+    const { logPath, keyDir } = await buildDemoStore(2);
+    for (const args of [
+      ['verify', logPath, '--trust-root', keyDir, '--since', '2026-07-10T09:00:00.000Z'],
+      ['verify', logPath, '--trust-root', keyDir, '--actor', 'app'],
+      ['show', logPath, '1', '--from-seq', '1'],
+      ['tail', logPath, '--provider', 'openai'],
+      ['key', 'gen', '--until', '2026-07-10T09:00:00.000Z'],
+    ]) {
+      const res = await runCli(args);
+      expect(res.exitCode).toBe(2);
+      expect(res.stderr).toContain('only valid with the export command');
+    }
+    // And unfiltered verify still behaves exactly as before on the same store.
+    const verify = await runCli(['verify', logPath, '--trust-root', keyDir]);
+    expect(verify.exitCode).toBe(0);
+  });
+});
+
+describe('CLI — key gen --format json', () => {
+  beforeEach(async () => {
+    await rm(TMP, { recursive: true, force: true });
+    await mkdir(TMP, { recursive: true });
+  });
+
+  it('prints a machine-readable summary; default (no private key) shape has no privateKeyPath', async () => {
+    const outDir = path.join(TMP, 'kjson');
+    const res = await runCli(['key', 'gen', '--out', outDir, '--format', 'json']);
+    expect(res.exitCode).toBe(0);
+    const parsed = JSON.parse(res.stdout);
+    expect(Object.keys(parsed).sort()).toEqual(['keyId', 'publicKey', 'publicKeyPath']);
+    expect(parsed.keyId).toMatch(/^[0-9a-f]{64}$/);
+    expect(parsed.publicKey).toMatch(/^[0-9a-f]{64}$/); // 32 raw bytes hex
+    // The NOTE moves to stderr so stdout stays parseable.
+    expect(res.stderr).toContain('NOT saved');
+  });
+
+  it('with --out-private: includes privateKeyPath, keeps the WARNING on stderr, and NEVER leaks the private hex', async () => {
+    const outDir = path.join(TMP, 'kjson2', 'keys');
+    const keyFile = path.join(TMP, 'kjson2', 'k.json');
+    const res = await runCli([
+      'key',
+      'gen',
+      '--out',
+      outDir,
+      '--out-private',
+      keyFile,
+      '--format',
+      'json',
+    ]);
+    expect(res.exitCode).toBe(0);
+    const parsed = JSON.parse(res.stdout);
+    expect(parsed.privateKeyPath).toBe(keyFile);
+    expect(res.stderr).toContain('PROTECT THIS FILE');
+    // The private key WAS written to the file — so we can grep for its exact hex in both streams.
+    // (It is a PKCS#8 DER blob, so any even-length lowercase-hex string is the right shape.)
+    const written = JSON.parse(await readFile(keyFile, 'utf8'));
+    expect(written.privateKey).toMatch(/^[0-9a-f]+$/);
+    expect(res.stdout).not.toContain(written.privateKey);
+    expect(res.stderr).not.toContain(written.privateKey);
+    // No other secret-ish field sneaks into stdout either.
+    expect(res.stdout.toLowerCase()).not.toContain('privatekey":"');
+  });
+
+  it('text mode output is unchanged (fingerprint + warning on stdout)', async () => {
+    const outDir = path.join(TMP, 'ktext');
+    const res = await runCli(['key', 'gen', '--out', outDir]);
+    expect(res.exitCode).toBe(0);
+    expect(res.stdout).toContain('fingerprint');
+    expect(res.stdout).toContain('held in memory and NOT saved');
+  });
+
+  it('rejects an unknown --format with exit 2', async () => {
+    const res = await runCli(['key', 'gen', '--out', path.join(TMP, 'bad'), '--format', 'yaml']);
+    expect(res.exitCode).toBe(2);
+    expect(res.stderr).toContain('--format must be text or json');
+  });
+});
+
 describe('CLI — help + unknown commands', () => {
   it('prints help with no args (exit 0)', async () => {
     const res = await runCli([]);
