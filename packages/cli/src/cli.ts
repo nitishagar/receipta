@@ -7,8 +7,11 @@
  *   receipta verify <store> [--trust-root keys/] [--format json|text]
  *                                             verify a receipt chain offline; exit 0 on valid, non-zero otherwise
  *   receipta export <store> --format json|csv|ocsf|intoto|dsse [--out file] [--key keyfile]
+ *                                             [filters: --from-seq --to-seq --since --until --actor --provider]
  *                                             export receipts in an auditor-consumable format without re-signing
  *                                             (dsse signs a NEW envelope around each receipt with a user-supplied key)
+ *   receipta show <store> <seq>               print one receipt (pretty JSON) by sequence number
+ *   receipta tail <store> [n]                 print the last n receipts (default 10), one JSON object per line
  *
  * DESIGN (PLAN Phase 4, IMPLICIT_SPEC S4.1-S4.3): uses node:util parseArgs (zero added deps),
  * depends only on @receipta/core. verify needs no network. export does not alter the store.
@@ -26,6 +29,7 @@ import {
   verifyChain,
   readAll,
   sign,
+  toHex,
   keyPairFromJsonString,
   keyPairToJsonString,
   receiptBodyHash,
@@ -36,24 +40,116 @@ import {
 const HELP = `receipta — tamper-evident receipts for AI decisions
 
 Usage:
-  receipta key gen [--out <dir>] [--out-private <file>]
+  receipta key gen [--out <dir>] [--out-private <file>] [--format text|json]
                                               Generate an Ed25519 key pair; write the public key, print the fingerprint.
                                               With --out-private, also persist the private key (mode 0600; refuse overwrite).
+                                              With --format json, print a machine-readable summary (never the private key).
   receipta verify <store> [--trust-root <dir>] [--format json|text]
                                               Verify a receipt chain offline. Exit 0 if valid, non-zero otherwise.
   receipta export <store> --format json|csv|ocsf|intoto|dsse [--out <file>] [--key <keyfile>]
-                                              Export receipts (no re-signing).
+                                              [--from-seq <n>] [--to-seq <n>] [--since <iso>] [--until <iso>]
+                                              [--actor <id>] [--provider <name>]
+                                              Export receipts (no re-signing). Filters are inclusive, combine with AND,
+                                              and only apply to export. --since/--until take UTC ISO-8601
+                                              (e.g. 2026-08-14T20:00:00Z); a filter matching nothing exports an empty set.
+  receipta show <store> <seq>
+                                              Print one receipt (pretty JSON) by its sequence number. Exit 1 if absent.
+  receipta tail <store> [n]
+                                              Print the last n receipts (default 10), one JSON object per line.
 
 verify needs no network. The trust root (keys/<key_id>.pub) must be supplied or defaults to ./keys.
 key gen --out-private writes a receipta key-pair JSON file ({keyId, publicKey, privateKey}, byte
                                               fields hex-encoded, mode 0600). PROTECT THIS FILE — it can sign receipts.
 export --format dsse requires --key <keyfile> (a receipta key-pair JSON file); the envelope signs a
                                               NEW DSSE layer around each receipt; the store is untouched.
+show/tail and filtered export read the store without verifying — run verify first for assurance.
 `;
 
 /** Supported `export --format` values. Keep in lockstep with the switch in `cmdExport`. */
 const EXPORT_FORMATS = ['json', 'csv', 'ocsf', 'intoto', 'dsse'] as const;
 type ExportFormat = (typeof EXPORT_FORMATS)[number];
+
+/** Filter options: valid ONLY on `export` (single choke point in `main`). Inclusive bounds, AND-composed. */
+const FILTER_OPTIONS = ['from-seq', 'to-seq', 'since', 'until', 'actor', 'provider'] as const;
+
+/**
+ * UTC ISO-8601 shape accepted by --since/--until. The fixed-width `Z` form is required (not +hh:mm)
+ * because filtering compares `body.timestamp.iso8601_ms` lexicographically — safe only when every
+ * string is the same UTC shape, which is also exactly what every emitter writes (`toISOString()`).
+ */
+const ISO_UTC_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+
+/** Parsed, validated export filters (all optional). */
+interface ExportFilters {
+  fromSeq?: number;
+  toSeq?: number;
+  since?: string;
+  until?: string;
+  actor?: string;
+  provider?: string;
+}
+
+/** Inclusive, AND-composed projection filter over a receipt body (export is a projection, not a lookup). */
+function receiptPassesFilters(r: Receipt, f: ExportFilters): boolean {
+  const b = r.body;
+  if (f.fromSeq !== undefined && b.seq < f.fromSeq) return false;
+  if (f.toSeq !== undefined && b.seq > f.toSeq) return false;
+  if (f.since !== undefined && b.timestamp.iso8601_ms < f.since) return false;
+  if (f.until !== undefined && b.timestamp.iso8601_ms > f.until) return false;
+  if (f.actor !== undefined && b.actor.id !== f.actor) return false;
+  if (f.provider !== undefined && b.provider !== f.provider) return false;
+  return true;
+}
+
+/** Parse + validate filter values from the shared values map; exits 2 on any malformed value. */
+function parseFilters(values: Record<string, unknown>): ExportFilters {
+  const f: ExportFilters = {};
+  const fromSeq = values['from-seq'] as string | undefined;
+  const toSeq = values['to-seq'] as string | undefined;
+  if (fromSeq !== undefined) {
+    if (!/^\d+$/.test(fromSeq)) {
+      process.stderr.write(
+        `receipta export: --from-seq must be a non-negative integer (got "${fromSeq}").\n`,
+      );
+      exit(2);
+    }
+    f.fromSeq = Number(fromSeq);
+  }
+  if (toSeq !== undefined) {
+    if (!/^\d+$/.test(toSeq)) {
+      process.stderr.write(
+        `receipta export: --to-seq must be a non-negative integer (got "${toSeq}").\n`,
+      );
+      exit(2);
+    }
+    f.toSeq = Number(toSeq);
+  }
+  const since = values.since as string | undefined;
+  const until = values.until as string | undefined;
+  if (since !== undefined) {
+    if (!ISO_UTC_RE.test(since)) {
+      process.stderr.write(
+        `receipta export: --since must be UTC ISO-8601 with Z, e.g. 2026-08-14T20:00:00Z (got "${since}").\n`,
+      );
+      exit(2);
+    }
+    f.since = since;
+  }
+  if (until !== undefined) {
+    if (!ISO_UTC_RE.test(until)) {
+      process.stderr.write(
+        `receipta export: --until must be UTC ISO-8601 with Z, e.g. 2026-08-14T20:00:00Z (got "${until}").\n`,
+      );
+      exit(2);
+    }
+    f.until = until;
+  }
+  const actor = values.actor as string | undefined;
+  if (actor !== undefined) f.actor = actor; // exact match on body.actor.id
+  const provider = values.provider as string | undefined;
+  if (provider !== undefined) f.provider = provider; // exact match on body.provider
+  return f;
+}
 
 interface ParsedArgs {
   command: string;
@@ -68,24 +164,51 @@ function parse(argv: string[]): ParsedArgs {
   }
   const command = argv[0]!;
   const rest = argv.slice(1);
-  const { values, positionals } = parseArgs({
-    args: rest,
-    options: {
-      out: { type: 'string' },
-      'out-private': { type: 'string' },
-      'trust-root': { type: 'string' },
-      format: { type: 'string', default: 'text' },
-      key: { type: 'string' },
-    },
-    allowPositionals: true,
-    tokens: false,
-  });
-  return { command, values, positionals };
+  let parsed: { values: Record<string, unknown>; positionals: string[] };
+  try {
+    parsed = parseArgs({
+      args: rest,
+      options: {
+        out: { type: 'string' },
+        'out-private': { type: 'string' },
+        'trust-root': { type: 'string' },
+        format: { type: 'string', default: 'text' },
+        key: { type: 'string' },
+        'from-seq': { type: 'string' },
+        'to-seq': { type: 'string' },
+        since: { type: 'string' },
+        until: { type: 'string' },
+        actor: { type: 'string' },
+        provider: { type: 'string' },
+      },
+      allowPositionals: true,
+      tokens: false,
+    });
+  } catch (e) {
+    // parseArgs strict mode throws on anything option-shaped but unknown (e.g. `tail store -5`
+    // parses `-5` as an unknown option). That is a usage error → exit 2, never a stack-trace exit 1.
+    process.stderr.write(`receipta: invalid arguments: ${(e as Error).message}\n`);
+    exit(2);
+  }
+  return { command, values: parsed.values, positionals: parsed.positionals };
 }
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const { command, values, positionals } = parse(argv);
+
+  // Single choke point (not per-command): filter flags are projection options for `export` only.
+  // Rejecting them here means `verify --since=…` can never be read as "verify part of the chain".
+  if (command !== 'export') {
+    for (const opt of FILTER_OPTIONS) {
+      if (values[opt] !== undefined) {
+        process.stderr.write(
+          `receipta: --${opt} is only valid with the export command (got it on "${command}").\n`,
+        );
+        exit(2);
+      }
+    }
+  }
 
   switch (command) {
     case 'key':
@@ -94,6 +217,10 @@ async function main(): Promise<void> {
       return cmdVerify(positionals, values);
     case 'export':
       return cmdExport(positionals, values);
+    case 'show':
+      return cmdShow(positionals);
+    case 'tail':
+      return cmdTail(positionals);
     case 'help':
     case '--help':
     case '-h':
@@ -115,6 +242,11 @@ async function cmdKey(_positionals: string[], values: Record<string, unknown>): 
   }
   const outDir = (values.out as string) ?? 'keys';
   const outPrivate = values['out-private'] as string | undefined;
+  const format = (values.format as string) ?? 'text';
+  if (format !== 'text' && format !== 'json') {
+    process.stderr.write(`receipta key gen: --format must be text or json (got "${format}").\n`);
+    exit(2);
+  }
   const kp = generateKeyPair();
 
   // Failure ordering (PLAN Phase 2 Design Analysis): write the PRIVATE key file FIRST with mode 0600
@@ -155,6 +287,31 @@ async function cmdKey(_positionals: string[], values: Record<string, unknown>): 
       );
       exit(1);
     }
+    if (format === 'json') {
+      // Machine-readable mode: stdout carries ONLY the JSON summary (parseable); the stern warning
+      // goes to stderr so it is still shown. The private key material itself is NEVER printed in
+      // either stream — only the path where it was written.
+      process.stderr.write(
+        [
+          `WARNING: the PRIVATE key was written to disk. PROTECT THIS FILE — anyone holding it can`,
+          `  sign receipts as this key_id. Move it to a secret store / KMS for production use.`,
+          ``,
+        ].join('\n'),
+      );
+      process.stdout.write(
+        JSON.stringify(
+          {
+            keyId: kp.keyId,
+            publicKey: toHex(exportPublicKey(kp.publicKey)),
+            publicKeyPath: `${outDir}/${kp.keyId}.pub`,
+            privateKeyPath: outPrivate,
+          },
+          null,
+          2,
+        ) + '\n',
+      );
+      return;
+    }
     process.stdout.write(
       [
         `generated Ed25519 key pair.`,
@@ -173,6 +330,27 @@ async function cmdKey(_positionals: string[], values: Record<string, unknown>): 
 
   // Default path: publish the public trust key only; the private key stays in memory and is discarded.
   await writeTrustedKey(outDir, kp.keyId, exportPublicKey(kp.publicKey));
+  if (format === 'json') {
+    process.stderr.write(
+      [
+        `NOTE: the PRIVATE key was held in memory and NOT saved. To use it for signing,`,
+        `  store it securely (env/KMS). This command only publishes the trusted public key.`,
+        ``,
+      ].join('\n'),
+    );
+    process.stdout.write(
+      JSON.stringify(
+        {
+          keyId: kp.keyId,
+          publicKey: toHex(exportPublicKey(kp.publicKey)),
+          publicKeyPath: `${outDir}/${kp.keyId}.pub`,
+        },
+        null,
+        2,
+      ) + '\n',
+    );
+    return;
+  }
   process.stdout.write(
     [
       `generated Ed25519 key pair.`,
@@ -268,10 +446,12 @@ async function cmdExport(positionals: string[], values: Record<string, unknown>)
   }
 
   // Read receipts WITHOUT verifying (export is read-only, never re-signs — S4.3). A verifier who
-  // needs assurance runs `verify` first; export just renders whatever is in the store.
+  // needs assurance runs `verify` first; export just renders whatever is in the store. Filters are
+  // inclusive projections over the parsed receipts — a filter matching nothing exports an empty set.
+  const filters = parseFilters(values);
   const receipts: Receipt[] = [];
   for await (const rec of readAll(storePath)) {
-    if ('receipt' in rec) receipts.push(rec.receipt);
+    if ('receipt' in rec && receiptPassesFilters(rec.receipt, filters)) receipts.push(rec.receipt);
   }
 
   let output: string;
@@ -312,6 +492,74 @@ async function cmdExport(positionals: string[], values: Record<string, unknown>)
     process.stdout.write(`exported ${receipts.length} receipt(s) to ${outFile} (${format}).\n`);
   } else {
     process.stdout.write(output + '\n');
+  }
+}
+
+// ─── show / tail ──────────────────────────────────────────────────────────────
+
+/**
+ * `receipta show <store> <seq>` — print exactly one receipt (pretty JSON) by its sequence number.
+ * Read-only: iterates `readAll` without acquiring the write lock and without creating anything.
+ * Torn/malformed frames yield `{error}` records and are skipped (the receipt behind a torn tail is
+ * not parseable, so it cannot be shown). A seq that is absent (or hidden behind a torn frame, or
+ * the store is missing/empty) exits 1 naming the requested seq.
+ */
+async function cmdShow(positionals: string[]): Promise<void> {
+  const storePath = positionals[0];
+  if (!storePath) {
+    process.stderr.write('receipta show: missing <store> path.\n');
+    exit(2);
+  }
+  const seqArg = positionals[1];
+  if (seqArg === undefined || !/^\d+$/.test(seqArg)) {
+    process.stderr.write(
+      `receipta show: expected a non-negative integer <seq> positional (got "${seqArg ?? '(none)'}").\n`,
+    );
+    exit(2);
+  }
+  const seq = Number(seqArg);
+  for await (const rec of readAll(storePath)) {
+    if ('receipt' in rec && rec.receipt.body.seq === seq) {
+      process.stdout.write(JSON.stringify(rec.receipt, null, 2) + '\n');
+      return;
+    }
+  }
+  process.stderr.write(
+    `receipta show: no receipt with seq=${seq} in "${storePath}" ` +
+      `(the store may be missing/empty, have fewer receipts, or the record is torn).\n`,
+  );
+  exit(1);
+}
+
+/**
+ * `receipta tail <store> [n]` — print the last n receipts (default 10) as NDJSON, one JSON object
+ * per line. Read-only, same skip-error-frames rule as export. n is parsed from the POSITIONAL STRING
+ * (never a negative number: parseArgs strict mode treats `-5` as an unknown option and `parse`
+ * exits 2). n=0 prints nothing, exit 0; a missing/empty store prints nothing, exit 0 (matches
+ * export's empty-set semantics).
+ */
+async function cmdTail(positionals: string[]): Promise<void> {
+  const storePath = positionals[0];
+  if (!storePath) {
+    process.stderr.write('receipta tail: missing <store> path.\n');
+    exit(2);
+  }
+  const nArg = positionals[1] ?? '10';
+  if (!/^\d+$/.test(nArg)) {
+    process.stderr.write(
+      `receipta tail: optional count must be a non-negative integer (got "${nArg}").\n`,
+    );
+    exit(2);
+  }
+  const n = Number(nArg);
+  const receipts: Receipt[] = [];
+  for await (const rec of readAll(storePath)) {
+    if ('receipt' in rec) receipts.push(rec.receipt);
+  }
+  // slice(-n) would return ALL records for n=0 (-0 === 0); compute the start explicitly instead.
+  const start = Math.max(0, receipts.length - n);
+  for (const r of receipts.slice(start)) {
+    process.stdout.write(JSON.stringify(r) + '\n');
   }
 }
 

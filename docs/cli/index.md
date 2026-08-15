@@ -20,6 +20,8 @@ Verifies a receipt chain **offline** (no network).
 
 ```bash
 receipta export <store> --format json|csv|ocsf|intoto|dsse [--out <file>] [--key <keyfile>]
+                 [--from-seq <n>] [--to-seq <n>] [--since <iso>] [--until <iso>]
+                 [--actor <id>] [--provider <name>]
 ```
 
 Exports receipts in an auditor-consumable format **without re-signing** (the store is never altered;
@@ -40,6 +42,20 @@ every export is a read-only pass over the log).
 `receipta key gen --out-private`). `--key` is rejected for the other formats. All formats emit a JSON
 array (one entry per receipt).
 
+### Filters
+
+The six filter flags are optional, **inclusive**, and combine with AND; they apply only to `export`
+(using one on any other command exits `2` — `verify` always verifies the whole chain):
+
+- `--from-seq <n>` / `--to-seq <n>` — receipt sequence bounds (`body.seq`).
+- `--since <iso>` / `--until <iso>` — timestamp bounds, UTC ISO-8601 with `Z`
+  (e.g. `2026-08-14T20:00:00Z`), compared against `body.timestamp.iso8601_ms`.
+- `--actor <id>` — exact match on `body.actor.id`.
+- `--provider <name>` — exact match on `body.provider`.
+
+A filter matching nothing exports an empty set (`[]`, or the CSV header alone) with exit `0` —
+filters are a projection, not a lookup.
+
 ### Verifying a DSSE export
 
 A recipient verifies an envelope independently of receipta, using only the trusted public key:
@@ -48,10 +64,31 @@ A recipient verifies an envelope independently of receipta, using only the trust
 2. Compute the DSSE PAE: `"DSSEv1 " + len(payloadType) + " " + payloadType + " " + len(bytes) + " " + bytes`.
 3. Verify the base64-decoded `sig` against the PAE under the public key whose id matches `signatures[0].keyid`.
 
+## show
+
+```bash
+receipta show <store> <seq>
+```
+
+Prints exactly one receipt (pretty JSON) by its sequence number. Read-only: no writer lock, the
+store is never modified, and torn/malformed frames are skipped rather than shown. Exits `1` naming
+the requested `seq` if that receipt is absent (the store may be missing/empty, have fewer receipts,
+or the record may be torn); exits `2` on a missing or non-integer `seq`.
+
+## tail
+
+```bash
+receipta tail <store> [n]
+```
+
+Prints the last `n` receipts (default `10`) as NDJSON — one compact JSON object per line, ready for
+`jq`/scripting. Same read-only and skip-torn-frames rules as `show`. `n=0` prints nothing; a
+missing/empty store prints nothing with exit `0`.
+
 ## key gen
 
 ```bash
-receipta key gen [--out <dir>] [--out-private <file>]
+receipta key gen [--out <dir>] [--out-private <file>] [--format text|json]
 ```
 
 Generates an Ed25519 key pair, writes the public key to `<out>/<key_id>.pub` (default `<out>` is
@@ -64,3 +101,7 @@ JSON format (`{keyId, publicKey, privateKey}`, hex-encoded byte fields). The fil
 `0600` and the write refuses to overwrite an existing file. **Protect this file** — anyone holding it
 can sign receipts as this `key_id`. A persisted key file is what `receipta export --format dsse --key`
 consumes.
+
+`--format json` prints a machine-readable summary (`{keyId, publicKey, publicKeyPath}` plus
+`privateKeyPath` only with `--out-private`) for scripting; the warning/note prose moves to stderr so
+stdout stays parseable. The private key material itself is **never** printed in either stream.

@@ -31,6 +31,7 @@ export default defineConfig({
           { text: 'Install', link: '/guide/install' },
           { text: 'Quickstart', link: '/guide/quickstart' },
           { text: 'Concepts', link: '/guide/concepts' },
+          { text: 'For Auditors', link: '/guide/auditors' },
           { text: 'Threat Model', link: '/guide/threat-model' },
         ],
       },

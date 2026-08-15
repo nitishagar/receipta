@@ -43,11 +43,22 @@ import {
   type ReceiptStore,
 } from '@receipta/core';
 
-/** The event the v7 Telemetry integration delivers when a language model call ends. */
+/**
+ * The event the v7 Telemetry integration delivers when a language model call ends.
+ *
+ * `usage` accepts BOTH ai-SDK spellings: v6-era `promptTokens`/`completionTokens` and the v7
+ * `inputTokens`/`outputTokens` rename. The receipt mapping prefers whichever side is present
+ * (nullish `??`, never a rename or an invented 0) — honest absence is preserved (G3.1).
+ */
 export interface LanguageModelCallEndEvent {
   callId?: string;
   finishReason?: string;
-  usage?: { promptTokens?: number; completionTokens?: number };
+  usage?: {
+    promptTokens?: number;
+    inputTokens?: number;
+    completionTokens?: number;
+    outputTokens?: number;
+  };
   responseId?: string;
   /** The assembled output (may be absent if the user disabled recordOutputs). */
   content?: unknown;
@@ -124,10 +135,14 @@ export function receiptaTelemetry(config: ReceiptaTelemetryConfig): ReceiptaTele
               response: event.content as JsonValue,
             }
           : undefined;
+        // Map BOTH ai-SDK usage spellings (v6 prompt/completion vs v7 input/output tokens).
+        // `??` keeps absence honest: if neither spelling of a side is present the key stays absent
+        // in the canonicalized body (undefined properties vanish) — exactly like today's behavior
+        // for a partially-populated usage object (G3.1, S-Usage-key: semantics, never a rename).
         const usage = event.usage
           ? {
-              input_tokens: event.usage.promptTokens,
-              output_tokens: event.usage.completionTokens,
+              input_tokens: event.usage.promptTokens ?? event.usage.inputTokens,
+              output_tokens: event.usage.completionTokens ?? event.usage.outputTokens,
             }
           : undefined;
         const commitments =
@@ -221,10 +236,15 @@ export interface ReceiptaTelemetryV6 {
   name: string;
   /** v6 experimental_telemetry options surface. */
   options?: Record<string, unknown>;
-  /** v6 finish callback (maps to onLanguageModelCallEnd). */
+  /** v6 finish callback (maps to onLanguageModelCallEnd). Same dual usage spelling as the event. */
   onFinish?: (result: {
     finishReason?: string;
-    usage?: { promptTokens?: number; completionTokens?: number };
+    usage?: {
+      promptTokens?: number;
+      inputTokens?: number;
+      completionTokens?: number;
+      outputTokens?: number;
+    };
     text?: string;
     response?: { id?: string; messages?: unknown };
     model?: string;
