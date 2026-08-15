@@ -36,6 +36,8 @@ pnpm lint             # eslint
 pnpm test             # vitest run
 pnpm build            # build all packages
 pnpm docs:dev         # local docs site (VitePress)
+pnpm smoke:local      # pre-publish check: pack all packages, install the tarballs into a fresh
+                      # sample npm project, and exercise them end-to-end (see "Cutting a release")
 ```
 
 ## Repository layout
@@ -105,11 +107,14 @@ its change. Multiple changesets may accumulate before a release.
    files. Internal dependents are bumped at the `patch` level (`updateInternalDependencies`).
 
 2. Review the diff, then commit the version bump.
-3. Tag and push: `git tag v<version> && git push origin v<version>`.
-4. The Publish workflow builds all packages and publishes to npm with `--provenance`
+3. Before tagging, run `pnpm smoke:local` — it packs the version-bumped packages and proves a
+   fresh npm consumer can install and use them (key gen → receipts → verify → export → tamper
+   detection), catching a broken `files`/`bin`/`exports` surface **before** it reaches the registry.
+4. Tag and push: `git tag v<version> && git push origin v<version>`.
+5. The Publish workflow builds all packages and publishes to npm with `--provenance`
    (Sigstore/SLSA attestation). Confirm each `@receipta/*` package appears on npm with a
    "Provenance" badge.
-5. A successful `Publish` triggers the [`Smoke-publish`](/.github/workflows/smoke-publish.yml)
+6. A successful `Publish` triggers the [`Smoke-publish`](/.github/workflows/smoke-publish.yml)
    workflow, which installs the just-tagged versions from npm in a clean directory and imports each
    `@receipta/*` package. A **green** `Publish` followed by a **red** `Smoke-publish` means the
    published artifacts are broken (e.g. a malformed `files`/`exports` whitelist shipped a package
